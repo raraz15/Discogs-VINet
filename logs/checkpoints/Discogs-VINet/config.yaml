@@ -1,0 +1,24 @@
+MODEL:
+  ARCHITECTURE: cqtnet
+  CHECKPOINT_DIR: logs/checkpoints/
+  CHECKPOINT_PATH: logs/checkpoints/Discogs-VINet/model_checkpoint.pth
+  DOWNSAMPLE_FACTOR: 20
+  L2_NORMALIZE: true
+  NAME: Discogs-VINet
+TRAIN:
+  BATCH_SIZE: 48
+  CONTEXT_LENGTH: 8000
+  DATA_USAGE_RATIO: 1.0
+  FEATURES_DIR: /scratch/user/Discogs-VI/features/CQT/cqt/
+  LOSS_CONFIG:
+    MARGIN: 0.1
+    NEGATIVE_MINING_MODE: hard
+    POSITIVE_MINING_MODE: random
+    SQUARED_DISTANCE: false
+  LR:
+    INITIAL_RATE: 0.001
+    SCHEDULE: EXPONENTIAL
+  OPTIMIZER: AdamW
+  TRAIN_CLIQUES: ./data/discogs_20240701/main/DiscogsVI-YT-20240701-light.json.train
+  VALIDATION_CLIQUES: ./data/discogs_20240701/main/DiscogsVI-YT-20240701-light.json.val
+epochs: 50
