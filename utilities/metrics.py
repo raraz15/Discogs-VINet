@@ -4,53 +4,8 @@ from .tensor_op import (
     pairwise_cosine_similarity,
     pairwise_distance_matrix,
     pairwise_dot_product,
+    create_class_matrix,
 )
-
-
-def create_class_matrix(
-    labels: torch.Tensor, zero_diagonal: bool = False, memory_efficient: bool = False
-) -> torch.Tensor:
-    """Takes a 1D tensor of integer class labels and creates a binary metrix where each row
-    indicates if the columns are from the same clique. It is important to use double
-    precision to avoid numerical errors. Believe me.
-
-    Parameters:
-    -----------
-    labels: torch.Tensor
-        1D tensor of shape (n,) where n is the number of samples and labels[i] is the
-        integer label of the i-th sample.
-    zero_diagonal: bool = False
-        If True, set the diagonal of the class matrix to 0.
-    memory_efficient: bool = False
-        If True, calculate the class matrix for each embedding separately. If False, use
-        matrix operations to calculate the class matrix faster.
-
-    Returns:
-    --------
-    class_matrix: torch.Tensor
-        2D tensor of shape (n, n) where class_matrix[i, j] is 1 if labels[i] == labels[j]
-        and 0 otherwise. If zero_diagonal is set to True, class_matrix[i, j] = 0
-        dtype is torch.int32
-    """
-
-    assert labels.dim() == 1, "Labels must be a 1D tensor"
-
-    if memory_efficient:
-        class_matrix = torch.zeros(len(labels), len(labels), dtype=torch.int32)
-        for i, label in enumerate(labels):
-            class_matrix[i] = labels == label
-    else:
-        class_matrix = (
-            pairwise_distance_matrix(
-                labels.unsqueeze(1).double(), squared=True, precision="low"
-            )
-            < 0.5
-        ).int()
-
-    if zero_diagonal:
-        class_matrix.fill_diagonal_(0)
-
-    return class_matrix
 
 
 def calculate_metrics(

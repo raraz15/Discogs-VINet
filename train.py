@@ -5,11 +5,12 @@ from datetime import datetime
 import time
 import yaml
 import argparse
-from typing import Optional
+from typing import Tuple, Union
 
 import numpy as np
 
 import torch
+from torch.cuda.amp import autocast  # type: ignore
 from torch.utils.data import DataLoader
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -17,57 +18,76 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 from model.nets import CQTNet
 from model.dataset import TrainDataset, TestDataset
 from model.loss import triplet_loss
-from utilities.utils import count_model_parameters, save_model, load_model, format_time
+from utilities.utils import load_model, save_model, format_time
 from utilities.metrics import calculate_metrics
 
 SEED = 27  # License plate code of Gaziantep, gastronomical capital of Türkiye
 
 
 def train_epoch(
-    model: torch.nn.Module,
+    model: CQTNet,
     loader: DataLoader,
     loss_config: dict,
     optimizer: torch.optim.Optimizer,
-    scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-    device: str = "cpu",
-) -> float:
+    scheduler: Union[torch.optim.lr_scheduler.LRScheduler, None],
+    scaler: Union[torch.cuda.amp.GradScaler, None],  # type: ignore
+    device: str,
+) -> Tuple[float, float, Union[float, None]]:
     """Train the model for one epoch. Return the average loss of the epoch."""
 
-    model.train()
-    losses = []
-    for i, (anchors, labels) in enumerate(loader):
+    if scaler is not None and device == "cpu":
+        raise ValueError("AMP is not supported on CPU.")
 
-        # Add channel dimension and move to device
+    model.train()
+    losses, triplet_stats = [], []
+    for i, (anchors, labels) in enumerate(loader):
         anchors = anchors.unsqueeze(1).to(device)  # (B,F,T) -> (B,1,F,T)
         labels = labels.to(device)  # (B,)
-        optimizer.zero_grad()
-        embeddings = model(anchors)
-        loss = triplet_loss(embeddings, labels, **loss_config)
-        loss.backward()
-        optimizer.step()
+        optimizer.zero_grad()  # TODO set_to_none=True?
+        if scaler is not None:
+            with autocast(dtype=torch.float16):
+                embeddings = model(anchors)
+                loss, stats = triplet_loss(embeddings, labels, **loss_config)
+            scaler.scale(loss).backward()  # type: ignore
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            embeddings = model(anchors)
+            loss, stats = triplet_loss(embeddings, labels, **loss_config)
+            loss.backward()
+            optimizer.step()
         losses.append(loss.detach().item())
-        # Print the loss
-        if (i + 1) % (len(loader) // 10) == 0 or i == len(loader) - 1:
+        if stats is not None:
+            triplet_stats.append(stats)
+        if (i + 1) % (len(loader) // 25) == 0 or i == len(loader) - 1:
             print(
                 f"[{(i+1):>{len(str(len(loader)))}}/{len(loader)}], Batch Loss: {loss.item():.4f}"
             )
 
-    # Step the scheduler if given
     if scheduler is not None:
         scheduler.step()
+        lr = scheduler.optimizer.param_groups[0]["lr"]
+    else:
+        lr = optimizer.param_groups[0]["lr"]
 
     # Return the average loss of the epoch
     epoch_loss = np.array(losses).mean().item()
 
-    return epoch_loss
+    if triplet_stats:
+        triplet_stats = sum(triplet_stats) / len(triplet_stats)
+    else:
+        triplet_stats = None
+
+    return epoch_loss, lr, triplet_stats
 
 
 @torch.no_grad()
 def validate(
-    model: torch.nn.Module,
+    model: CQTNet,
     loader: DataLoader,
     similarity_search: str,
     chunk_size: int,
+    amp: bool,
     device: str,
 ) -> dict:
     """Evaluate the model by simulating the retrieval task. Compute the embeddings
@@ -78,15 +98,16 @@ def validate(
 
     Parameters:
     -----------
-    model : torch.nn.Module
+    model : CQTNet
         Model to evaluate
     loader : torch.utils.data.DataLoader
         DataLoader containing the test set cliques
     similarity_search: str
-        Similarity search function. Options are "NNS" for nearest neighbor search
-        and "MCSS" for maximum cosine similarity search.
+        Similarity search function. MIPS, NNS, or MCSS.
     chunk_size : int
         Chunk size to use during metrics calculation.
+    amp : bool
+        Use Automatic Mixed Precision.
     device : str
         Device to use for inference.
 
@@ -96,18 +117,24 @@ def validate(
         Dictionary containing the evaluation metrics. See utilities.metrics.calculate_metrics
     """
 
+    if amp and device == "cpu":
+        raise ValueError("AMP is not supported on CPU.")
+
     t0 = time.monotonic()
 
-    model.eval()  # setting the model to evaluation mode
+    model.eval()
     embedings, labels = [], []
     print("Extracting embeddings...")
-    for idx, (features, batch_labels) in enumerate(loader):
-        # Add channel dimension and move to device
-        features = features.unsqueeze(1).to(device)  # (B,F,T) -> (B,1,F,T)
-        batch_embeddings = model(features)
-        embedings.append(batch_embeddings)
-        labels.append(batch_labels)
-        # Print progress
+    for idx, (feature, label) in enumerate(loader):
+        assert feature.shape[0] == 1, "Batch size must be 1 for inference."
+        feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
+        if amp:
+            with autocast(dtype=torch.float16):
+                embedding = model(feature)
+        else:
+            embedding = model(feature)
+        embedings.append(embedding)
+        labels.append(label)
         if (idx + 1) % (len(loader) // 10) == 0 or idx == len(loader) - 1:
             print(f"[{(idx+1):>{len(str(len(loader)))}}/{len(loader)}]")
     embedings = torch.cat(embedings, dim=0)
@@ -135,25 +162,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("config_path", type=str, help="Path to the configuration file.")
     parser.add_argument(
-        "--epochs", type=int, default=50, help="Number of epochs to train the model."
-    )
-    parser.add_argument(
         "--save-frequency", type=int, default=1, help="Save the model every N epochs."
     )
     parser.add_argument(
         "--eval-frequency",
         type=int,
-        default=5,
+        default=1,
         help="Evaluate the model every N epochs.",
-    )
-    parser.add_argument(
-        "--similarity-search",
-        "-s",
-        type=str,
-        default="MCSS",
-        choices=["MCSS", "NNS"],
-        help="""Similarity search function to use for the evaluation. 
-        MCSS: Maximum Cosine Similarity Search, NNS: Nearest Neighbour Search.""",
     )
     parser.add_argument(
         "--chunk-size",
@@ -161,11 +176,6 @@ if __name__ == "__main__":
         type=int,
         default=1024,
         help="Chunk size to use during metrics calculation.",
-    )
-    parser.add_argument(
-        "--pre-eval",
-        action="store_true",
-        help="Evaluate the model before training.",
     )
     parser.add_argument(
         "--num-workers",
@@ -179,132 +189,68 @@ if __name__ == "__main__":
     parser.add_argument(
         "--wandb-id", type=str, default=None, help="Wandb id to resume an experiment."
     )
+    parser.add_argument(
+        "--wandb-project",
+        type=str,
+        default="VI-after_ismir",
+        help="Wandb project name.",
+    )
     args = parser.parse_args()
 
-    # Set the seed for reproducibility
     np.random.seed(SEED)
     torch.manual_seed(SEED)
     if torch.cuda.is_available():
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
         torch.cuda.manual_seed(SEED)
 
-    # Print the arguments
     print("\n\033[32mArguments:\033[0m")
     for arg in vars(args):
         print(f"\033[32m{arg}: {getattr(args, arg)}\033[0m")
 
-    # Load the config from the yaml file
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
     print("\n\033[36mExperiment Configuration:\033[0m")
     print(
         "\033[36m" + yaml.dump(config, indent=4, width=120, sort_keys=False) + "\033[0m"
     )
-    # Overwrite the epochs in the config file
-    config["epochs"] = args.epochs
 
-    # Initialize Wandb if specified
     if not args.no_wandb:
-        print("\nUsing Wandb to log the training process.")
         import wandb
 
         wandb.init(
-            project="VersionIdentification",
+            project=args.wandb_project,
             config=config,
-            id=wandb.util.generate_id() if args.wandb_id is None else args.wandb_id,
+            id=wandb.util.generate_id() if args.wandb_id is None else args.wandb_id,  # type: ignore
             resume="allow",
         )
     else:
-        print("\n\033[34mNot logging the training process.\033[0m")
+        print("\033[31mNot logging the training process.\033[0m")
 
-    # Set the device
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    print(f"\n\033[31mDevice: {device}\033[0m")
+    print(f"\n\033[34mDevice: {device}\033[0m")
 
-    # Create the save directories
+    torch.backends.cudnn.deterministic = config["TRAIN"]["CUDA_DETERMINISTIC"]  # type: ignore
+    torch.backends.cudnn.benchmark = config["TRAIN"]["CUDA_BENCHMARK"]  # type: ignore
+
+    # Load or create the model
+    model, optimizer, scheduler, scaler, start_epoch, train_loss, best_mAP = load_model(
+        config, device
+    )
+
     save_dir = os.path.join(config["MODEL"]["CHECKPOINT_DIR"], config["MODEL"]["NAME"])
     last_save_dir = os.path.join(save_dir, "last_epoch")
     best_save_dir = os.path.join(save_dir, "best_epoch")
-    print("\nCheckpoints will be saved to: ", save_dir)
+    print("Checkpoints will be saved to: ", save_dir)
 
-    # Get the current date and time
     date_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-    # Initialize the model
-    if config["MODEL"]["ARCHITECTURE"].upper() == "CQTNET":
-        model = CQTNet(l2_normalize=config["MODEL"]["L2_NORMALIZE"])
-    else:
-        raise ValueError("Model architecture not recognized.")
-    model.to(device)
-    grad_params, non_grad_params = count_model_parameters(model)
-
-    # Initialize the optimizer
-    if config["TRAIN"]["OPTIMIZER"].upper() == "SGD":
-        optimizer = torch.optim.SGD(
-            model.parameters(), lr=config["TRAIN"]["LR"]["INITIAL_RATE"], momentum=0.9
-        )
-    elif config["TRAIN"]["OPTIMIZER"].upper() == "ADAM":
-        optimizer = torch.optim.Adam(
-            model.parameters(), lr=config["TRAIN"]["LR"]["INITIAL_RATE"]
-        )
-    elif config["TRAIN"]["OPTIMIZER"].upper() == "ADAMW":
-        optimizer = torch.optim.AdamW(
-            model.parameters(), lr=config["TRAIN"]["LR"]["INITIAL_RATE"]
-        )
-    else:
-        raise ValueError("Optimizer not recognized.")
-
-    # Schedule the learning rate
-    if config["TRAIN"]["LR"]["SCHEDULE"].upper() == "STEP":
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=20, gamma=0.1, verbose=True
-        )
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "MULTISTEP":
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=[
-                10,
-                20,
-                30,
-                50,
-                70,
-                90,
-            ],
-            gamma=0.5,
-            verbose=True,
-        )
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "EXPONENTIAL":
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "NONE":
-        scheduler = None
-    else:
-        raise ValueError("Learning rate scheduler not recognized.")
-
-    # Load the loss configuration
-    loss_config = {k.lower(): v for k, v in config["TRAIN"]["LOSS_CONFIG"].items()}
-
-    # Load the model and the rest if specified
-    if "CHECKPOINT_PATH" in config["MODEL"]:
-        model, optimizer, scheduler, start_epoch, train_loss, best_mAP = load_model(
-            config["MODEL"]["CHECKPOINT_PATH"], model, optimizer, scheduler
-        )
-        print(
-            f"Model loaded from {config['MODEL']['CHECKPOINT_PATH']}, "
-            f"starting from epoch {start_epoch}."
-        )
-    else:
-        start_epoch, best_mAP = 1, 0.0
-        print("Starting training from random initialization.")
-
-    # Create the train, validation, and evaluation datasets
-    print("Creating the datasets...")
+    print("Creating the dataset...")
     train_dataset = TrainDataset(
         config["TRAIN"]["TRAIN_CLIQUES"],
         config["TRAIN"]["FEATURES_DIR"],
         context_length=config["TRAIN"]["CONTEXT_LENGTH"],
         mean_downsample_factor=config["MODEL"]["DOWNSAMPLE_FACTOR"],
-        data_usage_ratio=config["TRAIN"]["DATA_USAGE_RATIO"],
+        versions_per_clique=config["TRAIN"]["VERSIONS_PER_CLIQUE"],
+        clique_usage_ratio=config["TRAIN"]["CLIQUE_USAGE_RATIO"],
     )
     train_loader = DataLoader(
         train_dataset,
@@ -329,86 +275,101 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
     )
 
-    if args.pre_eval:
-        print("Evaluating the model before training...")
-        t0 = time.monotonic()
-        # Validation set fits in the GPU memory
-        metrics = validate(model, eval_loader, device=device)
-        t_eval = time.monotonic() - t0
-        print(f"mAP: {metrics['mAP']:.6f}, evaluated in {format_time(t_eval)}")
-        if not args.no_wandb:
-            wandb.log({**metrics, "eval_time": t_eval, "epoch": 0})
+    loss_config = {k.lower(): v for k, v in config["TRAIN"]["LOSS"].items()}
+
+    # Log the initial lr
+    if not args.no_wandb:
+        if scheduler is not None:
+            lr_current = scheduler.optimizer.param_groups[0]["lr"]
+        else:
+            lr_current = optimizer.param_groups[0]["lr"]
+        wandb.log(
+            {
+                "epoch": start_epoch - 1,
+                "lr": lr_current,
+            }
+        )
 
     print("Training the model...")
-    for epoch in range(start_epoch, args.epochs + 1):
+    for epoch in range(start_epoch, config["TRAIN"]["EPOCHS"] + 1):
 
         t0 = time.monotonic()
-        print(f" Epoch: [{epoch}/{args.epochs}] ".center(25, "="))
-        train_loss = train_epoch(
+        print(f" Epoch: [{epoch}/{config['TRAIN']['EPOCHS']}] ".center(25, "="))
+        train_loss, lr_current, triplet_stats = train_epoch(
             model,
             train_loader,
             loss_config,
             optimizer,
             scheduler,
+            scaler=scaler,
             device=device,
         )
         t_train = time.monotonic() - t0
         print(f"Average epoch Loss: {train_loss:.6f}, in {format_time(t_train)}")
         if not args.no_wandb:
-            wandb.log({"train_loss": train_loss, "train_time": t_train, "epoch": epoch})
+            wandb.log(
+                {
+                    "train_loss": train_loss,
+                    "train_time": t_train,
+                    "epoch": epoch,
+                    "lr": lr_current,
+                    "difficult_triplets": triplet_stats,
+                }
+            )
 
-        # Save the model every N epochs except the last epoch
-        if epoch % args.save_frequency == 0 and epoch != args.epochs:
+        if epoch % args.save_frequency == 0 or epoch == config["TRAIN"]["EPOCHS"]:
             save_model(
-                save_dir=last_save_dir,
+                last_save_dir,
                 config=config,
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
+                scaler=scaler,
                 train_loss=train_loss,
                 mAP=best_mAP,
                 date_time=date_time,
-                grad_params=grad_params,
-                non_grad_params=non_grad_params,
                 epoch=epoch,
             )
 
-        # Evaluate the model on the Validation set every N epochs, and at the last epoch
-        if epoch % args.eval_frequency == 0 or epoch == args.epochs:
+        if epoch % args.eval_frequency == 0 or epoch == config["TRAIN"]["EPOCHS"]:
             print("Evaluating the model...")
             t0 = time.monotonic()
             metrics = validate(
                 model,
                 eval_loader,
-                similarity_search=args.similarity_search,
+                similarity_search=config["MODEL"]["SIMILARITY_SEARCH"],
                 chunk_size=args.chunk_size,
+                amp=config["TRAIN"]["AUTOMATIC_MIXED_PRECISION"],
                 device=device,
             )
             t_eval = time.monotonic() - t0
             print(
-                f"mAP: {metrics['mAP']:.5f}, MR1: {metrics['MR']:.2f} - {format_time(t_eval)}"
+                f"MAP: {metrics['MAP']:.3f}, MR1: {metrics['MR1']:.2f} - {format_time(t_eval)}"
             )
-            if not args.no_wandb:
-                wandb.log({**metrics, "eval_time": t_eval, "epoch": epoch})
 
-            # Save the best model so far or the last model
-            if metrics["mAP"] > best_mAP or epoch == args.epochs:
-                # Save the model
+            if metrics["MAP"] >= best_mAP:
+                best_mAP = metrics["MAP"]
                 save_model(
-                    save_dir=last_save_dir if epoch == args.epochs else best_save_dir,
+                    best_save_dir,
                     config=config,
                     model=model,
                     optimizer=optimizer,
                     scheduler=scheduler,
+                    scaler=scaler,
                     train_loss=train_loss,
-                    mAP=metrics["mAP"],
+                    mAP=best_mAP,
                     date_time=date_time,
-                    grad_params=grad_params,
-                    non_grad_params=non_grad_params,
                     epoch=epoch,
                 )
-                # Update the best mAP
-                best_mAP = metrics["mAP"]
+            if not args.no_wandb:
+                wandb.log(
+                    {
+                        **metrics,
+                        "eval_time": t_eval,
+                        "epoch": epoch,
+                        "best_MAP": best_mAP,
+                    }
+                )
 
     print("===Training finished===")
     if not args.no_wandb:

@@ -73,7 +73,7 @@ def process_audio(
             hop_length=hop_size,
             n_bins=n_bins,
             bins_per_octave=bins_per_octave,
-        ).T  # (T,F)
+        ).T  # (T,F) TODO do not transpose?
         if cqt.shape[0] == 0:
             raise ValueError("Empty CQT.")
 

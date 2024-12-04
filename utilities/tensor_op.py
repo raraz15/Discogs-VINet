@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 
@@ -97,6 +97,7 @@ def pairwise_distance_matrix(
         return dist
 
 
+# NOTE: there is sth going on with cos sim!
 def pairwise_cosine_similarity(
     x: torch.Tensor, y: Optional[torch.Tensor] = None
 ) -> torch.Tensor:
@@ -158,3 +159,85 @@ def pairwise_dot_product(
         return torch.mm(x, y.t())
     else:
         return torch.mm(x, x.t())
+
+
+def create_class_matrix(
+    labels: torch.Tensor, zero_diagonal: bool = False, memory_efficient: bool = False
+) -> torch.Tensor:
+    """Takes a 1D tensor of integer class labels and creates a binary metrix where each row
+    indicates if the columns are from the same clique. It is important to use double
+    precision to avoid numerical errors. Believe me.
+
+    Parameters:
+    -----------
+    labels: torch.Tensor
+        1D tensor of shape (n,) where n is the number of samples and labels[i] is the
+        integer label of the i-th sample.
+    zero_diagonal: bool = False
+        If True, set the diagonal of the class matrix to 0.
+    memory_efficient: bool = False
+        If True, calculate the class matrix for each embedding separately. If False, use
+        matrix operations to calculate the class matrix faster.
+
+    Returns:
+    --------
+    class_matrix: torch.Tensor
+        2D tensor of shape (n, n) where class_matrix[i, j] is 1 if labels[i] == labels[j]
+        and 0 otherwise. If zero_diagonal is set to True, class_matrix[i, j] = 0
+        dtype is torch.int32
+    """
+
+    assert labels.dim() == 1, "Labels must be a 1D tensor"
+
+    if memory_efficient:
+        class_matrix = torch.zeros(len(labels), len(labels), dtype=torch.int32)
+        for i, label in enumerate(labels):
+            class_matrix[i] = labels == label
+    else:
+        class_matrix = (
+            pairwise_distance_matrix(
+                labels.unsqueeze(1).double(), squared=True, precision="low"
+            )
+            < 0.5
+        ).int()
+
+    if zero_diagonal:
+        class_matrix.fill_diagonal_(0)
+
+    return class_matrix
+
+
+def create_pos_neg_masks(labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Given ground truth labels, create masks for the positive and negative samples
+    in the batch. The positive mask indicates if the samples are from the same clique,
+    and the negative mask indicates if the samples are from different cliques. Diagonals
+    in both masks are set to 0 to avoid using the same sample as a positive or negative.
+
+    Parameters:
+    -----------
+    labels: torch.Tensor
+        1D tensor of shape (n,) where n is the number of samples and labels[i] is the
+        integer label of the i-th sample.
+
+    Returns:
+    --------
+    mask_pos: torch.Tensor
+        2D tensor of shape (n, n) where mask_pos[i, j] is 1 if ytrue[i] == ytrue[j]
+        and 0 otherwise. dtype is torch.float32
+    mask_neg: torch.Tensor
+        2D tensor of shape (n, n) where mask_neg[i, j] is 1 if ytrue[i] != ytrue[j]
+        and 0 otherwise. dtype is torch.float32
+    """
+
+    assert labels.dim() == 1, f"labels must be a 1D tensor not {labels.dim()}D"
+
+    # Create masks for the positive and negative samples, an anchor is not considered
+    # positive to itself
+    mask_pos = create_class_matrix(labels, zero_diagonal=True)
+    mask_neg = (1 - mask_pos).fill_diagonal_(0)
+
+    # Convert to float32
+    mask_pos = mask_pos.float()
+    mask_neg = mask_neg.float()
+
+    return mask_pos, mask_neg

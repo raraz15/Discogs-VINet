@@ -28,7 +28,8 @@ class TrainDataset(Dataset):
         mean_downsample_factor: int = 1,
         cqt_bins: int = 84,
         scale: bool = True,
-        data_usage_ratio: float = 1.0,
+        versions_per_clique: int = 2,
+        clique_usage_ratio: float = 1.0,
     ) -> None:
         """Initializes the training dataset.
 
@@ -47,8 +48,12 @@ class TrainDataset(Dataset):
             Number of CQT bins in a feature array
         scale : bool
             Whether to scale the features to [0,1]
-        data_usage_ratio : float
-            Ratio of the data to use. If < 1.0, it will reduce the number of cliques.
+        versions_per_clique : int
+            Number of versions to sample from a clique during each iteration. If this number
+            is greater than clique size it will sample some same versions multiple times.
+        clique_usage_ratio: float
+            Ratio of the cliques to use. If < 1.0, it will reduce the number of cliques.
+            Usefull for debugging, short tests.
         """
 
         assert context_length > 0, f"Expected context_length > 0, got {context_length}"
@@ -56,6 +61,7 @@ class TrainDataset(Dataset):
             mean_downsample_factor > 0
         ), f"Expected mean_downsample_factor > 0, got {mean_downsample_factor}"
         assert cqt_bins > 0, f"Expected cqt_bins > 0, got {cqt_bins}"
+        assert clique_usage_ratio > 0, f"Expected positive, got {clique_usage_ratio}"
 
         self.cliques_json_path = cliques_json_path
         self.features_dir = pathlib.Path(features_dir)
@@ -63,6 +69,7 @@ class TrainDataset(Dataset):
         self.mean_downsample_factor = mean_downsample_factor
         self.scale = scale
         self.cqt_bins = cqt_bins
+        self.versions_per_clique = versions_per_clique
 
         # Load the cliques
         print(f"Loading cliques from {cliques_json_path}")
@@ -91,6 +98,8 @@ class TrainDataset(Dataset):
             if len(self.cliques[clique_id]) < 2:
                 del self.cliques[clique_id]
 
+        self.clique_ids = list(self.cliques.keys())
+
         # Count the number of cliques and versions
         self.n_cliques, self.n_versions = 0, 0
         for versions in self.cliques.values():
@@ -99,17 +108,19 @@ class TrainDataset(Dataset):
         print(f"{self.n_cliques:>7,} cliques left.")
         print(f"{self.n_versions:>7,} versions left.")
 
-        # Create a list of all clique ids
-        self.clique_ids = list(self.cliques.keys())
+        if clique_usage_ratio < 1.0:
+            self.n_cliques = int(self.n_cliques * clique_usage_ratio)
+            self.clique_ids = list(self.cliques.keys())[: self.n_cliques]
+            print(f"\033[33mReducing to {len(self.clique_ids):>7,} cliques.\033[0m")
 
-        # Reduce the number of cliques if specified, typically used for debugging
-        if data_usage_ratio < 1.0:
-            self.n_cliques = int(self.n_cliques * data_usage_ratio)
-            print(f"\033[33mReducing data to {self.n_cliques:>7,} cliques.\033[0m")
-            self.clique_ids = self.clique_ids[: self.n_cliques]
+        self.indices = []
+        for clique_id in self.clique_ids:
+            versions = self.cliques[clique_id]
+            for i in range(len(versions)):
+                self.indices.append((clique_id, i))
 
     def __getitem__(self, index, encode_version=False) -> Tuple[torch.Tensor, list]:
-        """Get 2 random anchor versions from the same clique.
+        """Get self.samples_per_clique random anchor versions from a given clique.
 
         Parameters:
         -----------
@@ -122,22 +133,62 @@ class TrainDataset(Dataset):
         Returns:
         --------
         anchors : torch.Tensor
-            CQT features of 2 versions. shape=(2,F,T), dtype=float32
+            CQT features of self.samples_per_clique versions.
+            shape=(self.samples_per_clique, F, T), dtype=float32
             see self.load_cqt for more details.
         labels : list
             List of labels. The content depends on the encode_version parameter.
         """
 
+        # Get the clique_id and the version position in the clique of the first anchor
+        clique_id, version_pos = self.indices[index]
+
         # Get the versions of the clique
-        clique_id = self.clique_ids[index]
         versions = self.cliques[clique_id]
 
-        # Sample 2 random versions from the clique
-        anchor1_dct, anchor2_dct = np.random.choice(versions, 2, replace=False)
+        if self.versions_per_clique == 4:
+
+            # Sample 4 versions from the clique
+            if len(versions) == 2:
+                # If the clique has only 2 versions, no need to sample
+                anchor1_dct, anchor2_dct = versions
+                # Repeat the versions to have 4
+                anchor3_dct, anchor4_dct = versions
+            elif len(versions) == 3:
+                anchor1_dct, anchor2_dct, anchor3_dct = versions
+                # Sample the fourth version from the first three
+                anchor4_dct = np.random.choice([anchor1_dct, anchor2_dct, anchor3_dct])
+            elif len(versions) == 4:
+                # The order does not matter, so we can just take the first 4 versions
+                anchor1_dct, anchor2_dct, anchor3_dct, anchor4_dct = versions
+            else:
+                # First anchor is already selected
+                anchor1_dct = versions[version_pos]
+                # Sample 3 other versions from the clique except the selected version
+                possible_indices = np.delete(np.arange(len(versions)), version_pos)
+                version_pos2, version_pos3, version_pos4 = np.random.choice(
+                    possible_indices, 3, replace=False
+                )
+                anchor2_dct, anchor3_dct, anchor4_dct = (
+                    versions[version_pos2],
+                    versions[version_pos3],
+                    versions[version_pos4],
+                )
+            anchor_dicts = [anchor1_dct, anchor2_dct, anchor3_dct, anchor4_dct]
+
+        else:
+            # First anchor is already selected
+            anchor1_dct = versions[version_pos]
+
+            # Sample one other version from the clique except the current version
+            possible_indices = np.delete(np.arange(len(versions)), version_pos)
+            anchor2_dct = versions[np.random.choice(possible_indices)]
+
+            anchor_dicts = [anchor1_dct, anchor2_dct]
 
         # Load the CQT features for anchors and stack them
         anchors, labels = [], []
-        for dct in [anchor1_dct, anchor2_dct]:
+        for dct in anchor_dicts:
             anchors.append(self.load_cqt(dct["youtube_id"]))
             if encode_version:
                 # it may be usefull to encode the version_id in the label
@@ -149,9 +200,9 @@ class TrainDataset(Dataset):
         return anchors, labels
 
     def __len__(self) -> int:
-        """Each cliques appears once or more at each epoch, depending of its size."""
+        """Each version appears once at each epoch."""
 
-        return len(self.clique_ids)
+        return len(self.indices)
 
     def load_cqt(self, yt_id) -> torch.Tensor:
         """Load the magnitude CQT features for a single version with yt_id from the features
