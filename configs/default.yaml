@@ -1,5 +1,5 @@
 MODEL :
-  NAME : Discogs-VINet-2
+  NAME : Discogs-VINet
   ARCHITECTURE : cqtnet
   CHECKPOINT_DIR: logs/checkpoints/
   DOWNSAMPLE_FACTOR : 20 # Downsampling factor.
@@ -8,8 +8,8 @@ MODEL :
 TRAIN:
     # Train and Validation, and Augmentation directories
     FEATURES_DIR: /scratch/user/Discogs-VI/features/CQT/cqt/
-    TRAIN_CLIQUES: ./data/discogs_20240701/main/DiscogsVI-YT-20240701-light.json.train
-    VALIDATION_CLIQUES: ./data/discogs_20240701/main/DiscogsVI-YT-20240701-light.json.val
+    TRAIN_CLIQUES: ./data/discogs_20240701/main/Discogs-VI-YT-20240701-light.json.train
+    VALIDATION_CLIQUES: ./data/discogs_20240701/main/Discogs-VI-YT-20240701-light.json.val
     CONTEXT_LENGTH : 8000 # Number of frames to consider as context, before downsampling.
     BATCH_SIZE : 48 # Number of cliques to sample at each iteration. 2 versions per clique is sampled.
     LOSS_CONFIG :
