@@ -8,7 +8,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from model.dataset import TestDataset
-from utilities.utils import load_model, format_time
+from model.utils import load_model
+from utilities.utils import format_time
 from utilities.metrics import evaluate
 
 # My linux is complaining without the following line

@@ -31,7 +31,8 @@ from torch.utils.data import DataLoader
 
 from model.nets import CQTNet
 from model.dataset import InferenceDataset
-from utilities.utils import load_model, format_time
+from model.utils import load_model
+from utilities.utils import format_time
 from utilities.tensor_op import pairwise_distance_matrix
 
 
