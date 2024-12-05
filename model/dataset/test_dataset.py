@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from utilities.extract_cqt import mean_downsample_cqt
+from .dataset_utils import mean_downsample_cqt
 
 
 class TestDataset(Dataset):
