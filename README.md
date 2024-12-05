@@ -1,10 +1,8 @@
 # Discogs-VINet
 
-This repository contains the code to train and evaluate the Discogs-VINet model for musical version identification (VI), also known as cover song identification (CSI). The dataset and the model are discussed in detail in our [ISMIR2024 paper](https://arxiv.org/abs/2410.17400): "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata". 
+This repository contains the code to train and evaluate Discogs-VINet models for musical version identification (VI), also known as, cover song identification (CSI). The model and the development dataset are discussed in our [ISMIR2024 paper](https://arxiv.org/abs/2410.17400): "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata". 
 
 *Note:* I am keeping the repository updated with new experiments so the main branch has different features from the ISMIR submission. If you want to access the ISMIR2024 code just do `git checkout ISMIR2024`.
-
-*Update:* We participated in the MIREX2024 Cover Song Identification task with an improved Discogs-VINet-MIREX, you can find the paper [here](https://futuremirex.com/portal/wp-content/uploads/2024/11/R_Oguz_Araz-MIREX2024.pdf). Our submission came in 2nd place! However, since ByteCover2 is not open source, it is known to be not reproducible, and it has x8 times more parameters, we *are* the open-source and reproducible winners.
 
 Contact: <recepoguz.araz@upf.edu>
 
@@ -21,12 +19,13 @@ conda activate discogs-vinet
 
 ## Dataset
 
-For training the model we use the Discogs-VI-YT dataset. You can Download it from: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13983028.svg)](https://doi.org/10.5281/zenodo.13983028)
-For more information about the dataset please [see](https://mtg.github.io/discogs-vi-dataset/).
+For training and evaluating models we use the [Discogs-VI-YT dataset](https://mtg.github.io/discogs-vi-dataset/).
 
 ## Train a Model
 
-We use YAML config files to determine model and training parameters. They are located in `configs/` directory.
+We use YAML config files to determine model and training parameters. They are located in `configs/` directory. 
+
+*Note:* For monitoring training we use Wandb. If you don't want to use it simply pass `--no-wandb` as indicated below.
 
 ```bash
 (discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python train.py -h
@@ -55,13 +54,18 @@ options:
   --wandb-id WANDB_ID   Wandb id to resume an experiment. (default: None)
 ```
 
+## Pre-trained Models
+
+We provide the pre-trained Discogs-VINet's weights and corresponding configuration file in `logs/checkpoints/Discogs-VINet/`. This model corresponds to the one described in ISMIR2024.
+
+Later, we participated in the MIREX2024 Cover Song Identification task with the improved, Discogs-VINet-MIREX model. You can find the short technical report [here](https://futuremirex.com/portal/wp-content/uploads/2024/11/R_Oguz_Araz-MIREX2024.pdf). Our submission came in 2nd place! However, since ByteCover2 is not open source, it is known to be not reproducible, and it has x8 times more parameters, we *are* the open-source and reproducible winners. 
+
+As described in the technical report, we overfitted an improved version of Discogs-VINet to the *full* Discogs-VI-YT and we called this model Discogs-VINet-MIREX. I will share the model weights soon (TODO). However, I think the performance of this new architecture trained on only the training partition (same as Discogs-VINet) is interesting for comparison. Unfortunately I did not report this metric on the technical paper and I do not know what to call this model. I will share the model and its metrics here soon.
+
+
 ## Evaluate a Model
 
-We provide the pre-trained Discogs-VINet weights and its corresponding configuration file in `logs/checkpoints/Discogs-VINet/`.
-
-As discussed in the paper, we included almost all of the Da-TACOS benchmark set' and SHS100K2-TEST's cliques in our test set–and added more. However, if for any reason, you still want to evaluate on either dataset, our evaluation script can help with it.
-
-TODO: Upload the MIREX2024 model, describe how it is trained on the full Discogs-VI.
+As discussed in the paper, we included almost all of the Da-TACOS benchmark set' and SHS100K2-TEST's cliques in our test set–and added more. However, if for any reason, you still want to evaluate on either dataset, our evaluation script can do with it.
 
 ```bash
 (discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python evaluate.py -h
@@ -107,8 +111,6 @@ Please cite the following publication when using the ISMIR2024 model or the data
 ```
 
 Please cite the following when using the MIREX2024 model:
-
-TODO: check if the bibtex code is correct
 
 > R. O. Araz, J. Serrà, Y. Mitsufuji, X. Serra, and D. Bogdanov, “Discogs-VINet-MIREX,” in Late-Breaking and Demo Session of the 25th International Society for Music Information Retrieval Conference (ISMIR), San Francisco, CA, USA, 2024.
 
