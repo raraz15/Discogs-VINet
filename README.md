@@ -1,8 +1,10 @@
 # Discogs-VINet
 
-This repository contains the code to train and evaluate the Discogs-VINet model on the Discogs-VI dataset. It also contains the code used for CQT extraction. The dataset and the model are discussed in detail in our ISMIR 2024 paper: "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata". I will keep the repository updated so the main branch may be diffent than the ISMIR submission. If you want to access the ISMIR2024 code just do `git checkout ISMIR2024`.
+This repository contains the code to train and evaluate the Discogs-VINet model for musical version identification (VI), also known as cover song identification (CSI). The dataset and the model are discussed in detail in our [ISMIR2024 paper](https://arxiv.org/abs/2410.17400): "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata". 
 
-Update: We also participated in the MIREX2024 Cover Song Identification task. Our submission came in 2nd place! Since ByteCover2 is not open source, it is *known* to be not reproducible, and it has x8 times more parameters, we are the open-source and reproducible winners.
+*Note:* I am keeping the repository updated with new experiments so the main branch has different features from the ISMIR submission. If you want to access the ISMIR2024 code just do `git checkout ISMIR2024`.
+
+*Update:* We participated in the MIREX2024 Cover Song Identification task with an improved Discogs-VINet-MIREX, you can find the paper [here](https://futuremirex.com/portal/wp-content/uploads/2024/11/R_Oguz_Araz-MIREX2024.pdf). Our submission came in 2nd place! However, since ByteCover2 is not open source, it is known to be not reproducible, and it has x8 times more parameters, we *are* the open-source and reproducible winners.
 
 Contact: <recepoguz.araz@upf.edu>
 
@@ -55,7 +57,9 @@ options:
 
 ## Evaluate a Model
 
-We provide pre-trained Discogs-VINet weights and its corresponding configuration file in `logs/checkpoints/Discogs-VINet/`.
+We provide the pre-trained Discogs-VINet weights and its corresponding configuration file in `logs/checkpoints/Discogs-VINet/`.
+
+As discussed in the paper, we included almost all of the Da-TACOS benchmark set' and SHS100K2-TEST's cliques in our test set–and added more. However, if for any reason, you still want to evaluate on either dataset, our evaluation script can help with it.
 
 TODO: Upload the MIREX2024 model, describe how it is trained on the full Discogs-VI.
 
@@ -102,7 +106,7 @@ Please cite the following publication when using the ISMIR2024 model or the data
 }
 ```
 
-Please cite the following publication when using the MIREX2024 model:
+Please cite the following when using the MIREX2024 model:
 
 TODO: check if the bibtex code is correct
 
