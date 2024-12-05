@@ -77,7 +77,7 @@ class TestDataset(Dataset):
             self.discogs_vi = False
             self.shs100k = True
             self.datacos = False
-        elif "discogsvi" in cliques_json_path.lower():
+        elif "discogs-vi" in cliques_json_path.lower():
             self.discogs_vi = True
             self.shs100k = False
             self.datacos = False
