@@ -169,19 +169,19 @@ class TestDataset(Dataset):
         feature_path = feature_dir / f"{_id}.mm"
         feature_shape_path = feature_dir / f"{_id}.npy"
 
-        # Load the entire memmap file. As we use full tracks in evaluation
+        # Load the entire memmap file as we use full tracks in evaluation
         feature_shape = tuple(np.load(feature_shape_path))
         fp = np.memmap(
             feature_path,
             dtype="float16",
             mode="r",
             shape=feature_shape,
-        )
+        )  # (T, F)
         # Convert to float32
         feature = np.array(fp, dtype=np.float32)
         del fp
+        assert feature.size > 0, "Empty feature"
         assert feature.ndim == 2, f"Expected 2D feature, got {feature.ndim}D"
-        assert feature.shape[0] > 0, "Empty feature"
         assert (
             feature.shape[1] == self.cqt_bins
         ), f"Expected {self.cqt_bins} features, got {feature.shape[1]}"

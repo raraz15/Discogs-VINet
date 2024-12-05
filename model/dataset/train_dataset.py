@@ -253,10 +253,10 @@ class TrainDataset(Dataset):
             )
 
         # Convert to float32
-        feature = np.array(fp, dtype=np.float32)
+        feature = np.array(fp, dtype=np.float32)  # (T, F)
         del fp
+        assert feature.size > 0, "Empty feature"
         assert feature.ndim == 2, f"Expected 2D feature, got {feature.ndim}D"
-        assert feature.shape[0] > 0, "Empty feature"
         assert (
             feature.shape[1] == self.cqt_bins
         ), f"Expected {self.cqt_bins} features, got {feature.shape[1]}"
