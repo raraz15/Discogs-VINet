@@ -14,11 +14,11 @@ from torch.utils.data import DataLoader
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
+from evaluate import evaluate
 from model.nets import CQTNet
 from model.dataset import TrainDataset, TestDataset
 from model.loss import triplet_loss
 from model.utils import load_model, save_model
-from utilities.metrics import evaluate
 from utilities.utils import format_time
 
 
