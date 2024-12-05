@@ -129,7 +129,7 @@ if __name__ == "__main__":
         "config_path",
         type=str,
         help="""Path to the configuration file of the trained model. 
-        The config will be used to find model weigths""",
+        The config will be used to find model weigths.""",
     )
     parser.add_argument(
         "test_cliques",
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     if args.disable_amp:
         config["TRAIN"]["AUTOMATIC_MIXED_PRECISION"] = False
 
-    model = load_model(config, device)[0]
+    model = load_model(config, device, mode="infer")
 
     if args.output_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))

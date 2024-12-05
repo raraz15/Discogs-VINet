@@ -85,80 +85,106 @@ def save_model(
     print(f"Model saved in {save_dir}")
 
 
-def load_model(config: dict, device: str):
+def load_model(config: dict, device: str, mode="train"):
+
+    assert mode in ["train", "infer"], "Mode must be either 'train' or 'infer'"
 
     model = build_model(config, device)
 
-    if config["TRAIN"]["OPTIMIZER"].upper() == "ADAM":
-        optimizer = torch.optim.Adam(model.parameters(), lr=config["TRAIN"]["LR"]["LR"])
-    elif config["TRAIN"]["OPTIMIZER"].upper() == "ADAMW":
-        optimizer = torch.optim.AdamW(
-            model.parameters(), lr=config["TRAIN"]["LR"]["LR"]
-        )
-    else:
-        raise ValueError("Optimizer not recognized.")
+    if mode == "train":
 
-    if "PARAMS" in config["TRAIN"]["LR"]:
-        lr_params = {k.lower(): v for k, v in config["TRAIN"]["LR"]["PARAMS"].items()}
-    if config["TRAIN"]["LR"]["SCHEDULE"].upper() == "STEP":
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **lr_params)
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "MULTISTEP":
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            **lr_params,
-        )
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "EXPONENTIAL":
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer,
-            **lr_params,
-        )
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "NONE":
-        scheduler = None
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "COSINE":
-        scheduler = CosineAnnealingWarmupRestarts(
-            optimizer,
-            **lr_params,
-        )
-    elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "LIN-WARMUP-PCWS":
-        scheduler = WarmupPiecewiseConstantScheduler(
-            optimizer,
-            min_lr=config["TRAIN"]["LR"]["LR"],
-            **lr_params,
-        )
-    else:
-        raise ValueError("Learning rate scheduler not recognized.")
-
-    if config["TRAIN"]["AUTOMATIC_MIXED_PRECISION"]:
-        print("\033[32mUsing Automatic Mixed Precision...\033[0m")
-        scaler = torch.cuda.amp.GradScaler()
-    else:
-        print("Using full precision...")
-        scaler = None
-
-    start_epoch = 1
-    train_loss = 0.0
-    mAP = 0.0
-
-    if "CHECKPOINT_PATH" in config["MODEL"]:
-        checkpoint_path = config["MODEL"]["CHECKPOINT_PATH"]
-        if os.path.isfile(checkpoint_path):
-            print(f"\033[32mLoading the model checkpoint from {checkpoint_path}\033[0m")
-            checkpoint = torch.load(checkpoint_path, map_location=device)
-            model.load_state_dict(checkpoint["model_state_dict"])
-            print(f"Model loaded from epoch {checkpoint['epoch']}")
-            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            # TODO Give the user the ability to discard the scheduler or create it from scratch
-            if scheduler is not None:
-                scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-            if scaler is not None:
-                scaler.load_state_dict(checkpoint["scaler_state_dict"])
-            start_epoch = checkpoint["epoch"] + 1  # start_epoch = last_epoch +1
-            train_loss = checkpoint["train_loss"]
-            mAP = checkpoint["mAP"]
+        if config["TRAIN"]["OPTIMIZER"].upper() == "ADAM":
+            optimizer = torch.optim.Adam(
+                model.parameters(), lr=config["TRAIN"]["LR"]["LR"]
+            )
+        elif config["TRAIN"]["OPTIMIZER"].upper() == "ADAMW":
+            optimizer = torch.optim.AdamW(
+                model.parameters(), lr=config["TRAIN"]["LR"]["LR"]
+            )
         else:
-            print(f"\033[31mNo checkpoint found at {checkpoint_path}\033[0m")
+            raise ValueError("Optimizer not recognized.")
+
+        if "PARAMS" in config["TRAIN"]["LR"]:
+            lr_params = {
+                k.lower(): v for k, v in config["TRAIN"]["LR"]["PARAMS"].items()
+            }
+        if config["TRAIN"]["LR"]["SCHEDULE"].upper() == "STEP":
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **lr_params)
+        elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "MULTISTEP":
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                **lr_params,
+            )
+        elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "EXPONENTIAL":
+            scheduler = torch.optim.lr_scheduler.ExponentialLR(
+                optimizer,
+                **lr_params,
+            )
+        elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "NONE":
+            scheduler = None
+        elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "COSINE":
+            scheduler = CosineAnnealingWarmupRestarts(
+                optimizer,
+                **lr_params,
+            )
+        elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "LIN-WARMUP-PCWS":
+            scheduler = WarmupPiecewiseConstantScheduler(
+                optimizer,
+                min_lr=config["TRAIN"]["LR"]["LR"],
+                **lr_params,
+            )
+        else:
+            raise ValueError("Learning rate scheduler not recognized.")
+
+        if config["TRAIN"]["AUTOMATIC_MIXED_PRECISION"]:
+            print("\033[32mUsing Automatic Mixed Precision...\033[0m")
+            scaler = torch.cuda.amp.GradScaler()
+        else:
+            print("Using full precision...")
+            scaler = None
+
+        start_epoch = 1
+        train_loss = 0.0
+        mAP = 0.0
+
+        if "CHECKPOINT_PATH" in config["MODEL"]:
+            checkpoint_path = config["MODEL"]["CHECKPOINT_PATH"]
+            if os.path.isfile(checkpoint_path):
+                print(
+                    f"\033[32mLoading the model checkpoint from {checkpoint_path}\033[0m"
+                )
+                checkpoint = torch.load(checkpoint_path, map_location=device)
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"Model loaded from epoch {checkpoint['epoch']}")
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                # TODO Give the user the ability to discard the scheduler or create it from scratch
+                if scheduler is not None:
+                    scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+                if scaler is not None:
+                    scaler.load_state_dict(checkpoint["scaler_state_dict"])
+                start_epoch = checkpoint["epoch"] + 1  # start_epoch = last_epoch +1
+                train_loss = checkpoint["train_loss"]
+                mAP = checkpoint["mAP"]
+            else:
+                print(f"\033[31mNo checkpoint found at {checkpoint_path}\033[0m")
+                print("Training from scratch.")
+        else:
+            print("\033[31mNo checkpoint path provided\033[0m")
             print("Training from scratch.")
+        return model, optimizer, scheduler, scaler, start_epoch, train_loss, mAP
+
     else:
-        print("\033[31mNo checkpoint path provided\033[0m")
-        print("Training from scratch.")
-    return model, optimizer, scheduler, scaler, start_epoch, train_loss, mAP
+        if "CHECKPOINT_PATH" in config["MODEL"]:
+            checkpoint_path = config["MODEL"]["CHECKPOINT_PATH"]
+            if os.path.isfile(checkpoint_path):
+                print(
+                    f"\033[32mLoading the model checkpoint from {checkpoint_path}\033[0m"
+                )
+                checkpoint = torch.load(checkpoint_path, map_location=device)
+                model.load_state_dict(checkpoint["model_state_dict"])
+                print(f"Model loaded from epoch {checkpoint['epoch']}")
+            else:
+                raise ValueError(f"No checkpoint found at {checkpoint_path}")
+        else:
+            raise ValueError("No checkpoint path provided in the config file.")
+        return model
