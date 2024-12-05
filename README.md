@@ -29,6 +29,9 @@ We use YAML config files to determine model and training parameters. They are lo
 
 ```bash
 (discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python train.py -h
+```
+
+```text
 usage: train.py [-h] [--epochs EPOCHS] [--save-frequency SAVE_FREQUENCY] [--eval-frequency EVAL_FREQUENCY] [--similarity-search {MCSS,NNS}] [--chunk-size CHUNK_SIZE] [--pre-eval] [--num-workers NUM_WORKERS] [--no-wandb] [--wandb-id WANDB_ID] config_path
 
 Training script for the model.
@@ -69,6 +72,9 @@ As discussed in the paper, we included almost all of the Da-TACOS benchmark set'
 
 ```bash
 (discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python evaluate.py -h
+```
+
+```text
 usage: evaluate.py [-h] [--output-dir OUTPUT_DIR] [--similarity-search {MCSS,NNS}] [--features-dir FEATURES_DIR] [--chunk-size CHUNK_SIZE] [--num-workers NUM_WORKERS] [--no-gpu] config_path test_cliques
 
 positional arguments:
