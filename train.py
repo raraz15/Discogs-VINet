@@ -17,7 +17,8 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 from model.nets import CQTNet
 from model.dataset import TrainDataset, TestDataset
 from model.loss import triplet_loss
-from utilities.utils import load_model, save_model, format_time, evaluate
+from utilities.utils import load_model, save_model, format_time
+from utilities.metrics import evaluate
 
 SEED = 27  # License plate code of Gaziantep, gastronomical capital of Türkiye
 

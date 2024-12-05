@@ -1,110 +1,12 @@
 import os
-import time
 import yaml
 
 import torch
-from torch.utils.data import DataLoader
 
-from utilities.metrics import calculate_metrics
-from model.nets import CQTNet
 from model.lr_schedulers import (
     CosineAnnealingWarmupRestarts,
     WarmupPiecewiseConstantScheduler,
 )
-
-
-@torch.no_grad()
-def evaluate(
-    model: CQTNet,
-    loader: DataLoader,
-    similarity_search: str,
-    chunk_size: int,
-    noise_works: bool,
-    amp: bool,
-    device: str,
-) -> dict:
-    """Evaluate the model by simulating the retrieval task. Compute the embeddings
-    of all versions and calculate the pairwise distances. Calculate the mean average
-    precision of the retrieval task. Metric calculations are done on the cpu but you
-    can choose the device for the model. Since we normalize the embeddings, MCSS is
-    equivalent to NNS. Please refer to the argparse arguments for more information.
-
-    Parameters:
-    -----------
-    model : CQTNet
-        Model to evaluate
-    loader : torch.utils.data.DataLoader
-        DataLoader containing the test set cliques
-    similarity_search: str
-        Similarity search function. MIPS, NNS, or MCSS.
-    chunk_size : int
-        Chunk size to use during metrics calculation.
-    noise_works : bool
-        Flag to indicate if the dataset contains noise works.
-    amp : bool
-        Flag to indicate if Automatic Mixed Precision should be used.
-    device : str
-        Device to use for inference and metric calculation.
-
-    Returns:
-    --------
-    metrics : dict
-        Dictionary containing the evaluation metrics. See utilities.metrics.calculate_metrics
-    """
-
-    t0 = time.monotonic()
-
-    model.eval()
-
-    N = len(loader)
-
-    emb_dim = model(
-        loader.dataset.__getitem__(0)[0].unsqueeze(0).unsqueeze(1).to(device)
-    ).shape[1]
-
-    # Preallocate tensors to avoid https://github.com/pytorch/pytorch/issues/13246
-    embeddings = torch.zeros((N, emb_dim), dtype=torch.float32, device=device)
-    labels = torch.zeros(N, dtype=torch.int32, device=device)
-
-    print("Extracting embeddings...")
-    for idx, (feature, label) in enumerate(loader):
-        assert feature.shape[0] == 1, "Batch size must be 1 for inference."
-        feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
-        with torch.autocast(device_type=device, dtype=torch.float16, enabled=amp):
-            embedding = model(feature)
-        embeddings[idx : idx + 1] = embedding
-        labels[idx : idx + 1] = label.to(device)
-        if (idx + 1) % (len(loader) // 10) == 0 or idx == len(loader) - 1:
-            print(f"[{(idx+1):>{len(str(len(loader)))}}/{len(loader)}]")
-    print(f"Extraction time: {format_time(time.monotonic() - t0)}")
-
-    # If there are no noise works, remove the cliques with single versions
-    # this may happen due to the feature extraction process.
-    if not noise_works:
-        # Count each label's occurrence
-        unique_labels, counts = torch.unique(labels, return_counts=True)
-        # Filter labels that occur more than once
-        valid_labels = unique_labels[counts > 1]
-        # Create a mask for indices where labels appear more than once
-        keep_mask = torch.isin(labels, valid_labels)
-        if keep_mask.sum() < len(labels):
-            print("Removing single version cliques...")
-            embeddings = embeddings[keep_mask]
-            labels = labels[keep_mask]
-
-    print("Calculating metrics...")
-    t0 = time.monotonic()
-    metrics = calculate_metrics(
-        embeddings,
-        labels,
-        similarity_search=similarity_search,
-        noise_works=noise_works,
-        chunk_size=chunk_size,
-        device=device,
-    )
-    print(f"Calculation time: {format_time(time.monotonic() - t0)}")
-
-    return metrics
 
 
 def format_time(t_total: float):

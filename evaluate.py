@@ -8,7 +8,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from model.dataset import TestDataset
-from utilities.utils import load_model, format_time, evaluate
+from utilities.utils import load_model, format_time
+from utilities.metrics import evaluate
 
 # My linux is complaining without the following line
 # It required for the DataLoader to have the num_workers > 0
