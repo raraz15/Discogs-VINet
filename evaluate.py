@@ -26,7 +26,7 @@ def evaluate(
     chunk_size: int,
     noise_works: bool,
     amp: bool,
-    device: str,
+    device: torch.device,
 ) -> dict:
     """Evaluate the model by simulating the retrieval task. Compute the embeddings
     of all versions and calculate the pairwise distances. Calculate the mean average
@@ -48,7 +48,7 @@ def evaluate(
         Flag to indicate if the dataset contains noise works.
     amp : bool
         Flag to indicate if Automatic Mixed Precision should be used.
-    device : str
+    device : torch.device
         Device to use for inference and metric calculation.
 
     Returns:
@@ -75,7 +75,7 @@ def evaluate(
     for idx, (feature, label) in enumerate(loader):
         assert feature.shape[0] == 1, "Batch size must be 1 for inference."
         feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
-        with torch.autocast(device_type=device, dtype=torch.float16, enabled=amp):
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp):
             embedding = model(feature)
         embeddings[idx : idx + 1] = embedding
         labels[idx : idx + 1] = label.to(device)
@@ -209,9 +209,9 @@ if __name__ == "__main__":
     )
 
     if args.no_gpu:
-        device = "cpu"
+        device = torch.device("cpu")
     else:
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"\033[31mDevice: {device}\033[0m\n")
 
     if args.disable_amp:

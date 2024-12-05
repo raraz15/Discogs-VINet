@@ -32,7 +32,7 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     scheduler: Union[torch.optim.lr_scheduler.LRScheduler, None],
     scaler: Union[torch.cuda.amp.GradScaler, None],  # type: ignore
-    device: str,
+    device: torch.device,
 ) -> Tuple[float, float, Union[float, None]]:
     """Train the model for one epoch. Return the average loss of the epoch."""
 
@@ -44,7 +44,7 @@ def train_epoch(
         anchors = anchors.unsqueeze(1).to(device)  # (B,F,T) -> (B,1,F,T)
         labels = labels.to(device)  # (B,)
         optimizer.zero_grad()  # TODO set_to_none=True?
-        with torch.autocast(device_type=device, dtype=torch.float16, enabled=amp):
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp):
             embeddings = model(anchors)
             loss, stats = triplet_loss(embeddings, labels, **loss_config)
         if amp:
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     else:
         print("\033[31mNot logging the training process.\033[0m")
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"\n\033[34mDevice: {device}\033[0m")
 
     torch.backends.cudnn.deterministic = config["TRAIN"]["CUDA_DETERMINISTIC"]  # type: ignore
