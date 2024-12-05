@@ -25,7 +25,7 @@ class TrainDataset(Dataset):
         cliques_json_path: str,
         features_dir: str,
         context_length: int,
-        mean_downsample_factor: int = 1,
+        mean_downsample_factor: int = 20,
         cqt_bins: int = 84,
         scale: bool = True,
         versions_per_clique: int = 2,

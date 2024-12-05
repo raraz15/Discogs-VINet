@@ -24,7 +24,7 @@ class TestDataset(Dataset):
         self,
         cliques_json_path: str,
         features_dir: str,
-        mean_downsample_factor: int = 1,
+        mean_downsample_factor: int = 20,
         cqt_bins: int = 84,
         scale: bool = True,
     ) -> None:
