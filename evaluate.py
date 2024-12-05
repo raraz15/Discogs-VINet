@@ -5,7 +5,6 @@ import yaml
 import argparse
 
 import torch
-from torch.cuda.amp import autocast  # type: ignore
 from torch.utils.data import DataLoader
 
 from model.nets import CQTNet
@@ -59,9 +58,6 @@ def evaluate(
 
     t0 = time.monotonic()
 
-    if amp and device == "cpu":
-        raise ValueError("AMP is not supported on CPU.")
-
     model.eval()
 
     N = len(loader)
@@ -74,19 +70,14 @@ def evaluate(
     embeddings = torch.zeros((N, emb_dim), dtype=torch.float32, device=device)
     labels = torch.zeros(N, dtype=torch.int32, device=device)
 
-    current_index = 0
     print("Extracting embeddings...")
     for idx, (feature, label) in enumerate(loader):
         assert feature.shape[0] == 1, "Batch size must be 1 for inference."
         feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
-        if amp:
-            with autocast(dtype=torch.float16):
-                embedding = model(feature)
-        else:
+        with torch.autocast(device_type=device, dtype=torch.float16, enabled=amp):
             embedding = model(feature)
-        embeddings[current_index : current_index + 1] = embedding
-        labels[current_index : current_index + 1] = label.to(device)
-        current_index += 1
+        embeddings[idx : idx + 1] = embedding
+        labels[idx : idx + 1] = label.to(device)
         if (idx + 1) % (len(loader) // 10) == 0 or idx == len(loader) - 1:
             print(f"[{(idx+1):>{len(str(len(loader)))}}/{len(loader)}]")
     print(f"Extraction time: {format_time(time.monotonic() - t0)}")

@@ -10,7 +10,6 @@ from typing import Tuple, Union
 import numpy as np
 
 import torch
-from torch.cuda.amp import autocast  # type: ignore
 from torch.utils.data import DataLoader
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -35,8 +34,7 @@ def train_epoch(
 ) -> Tuple[float, float, Union[float, None]]:
     """Train the model for one epoch. Return the average loss of the epoch."""
 
-    if scaler is not None and device == "cpu":
-        raise ValueError("AMP is not supported on CPU.")
+    amp = scaler is not None
 
     model.train()
     losses, triplet_stats = [], []
@@ -44,16 +42,14 @@ def train_epoch(
         anchors = anchors.unsqueeze(1).to(device)  # (B,F,T) -> (B,1,F,T)
         labels = labels.to(device)  # (B,)
         optimizer.zero_grad()  # TODO set_to_none=True?
-        if scaler is not None:
-            with autocast(dtype=torch.float16):
-                embeddings = model(anchors)
-                loss, stats = triplet_loss(embeddings, labels, **loss_config)
+        with torch.autocast(device_type=device, dtype=torch.float16, enabled=amp):
+            embeddings = model(anchors)
+            loss, stats = triplet_loss(embeddings, labels, **loss_config)
+        if amp:
             scaler.scale(loss).backward()  # type: ignore
             scaler.step(optimizer)
             scaler.update()
         else:
-            embeddings = model(anchors)
-            loss, stats = triplet_loss(embeddings, labels, **loss_config)
             loss.backward()
             optimizer.step()
         losses.append(loss.detach().item())
@@ -117,9 +113,6 @@ def validate(
         Dictionary containing the evaluation metrics. See utilities.metrics.calculate_metrics
     """
 
-    if amp and device == "cpu":
-        raise ValueError("AMP is not supported on CPU.")
-
     t0 = time.monotonic()
 
     model.eval()
@@ -128,10 +121,7 @@ def validate(
     for idx, (feature, label) in enumerate(loader):
         assert feature.shape[0] == 1, "Batch size must be 1 for inference."
         feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
-        if amp:
-            with autocast(dtype=torch.float16):
-                embedding = model(feature)
-        else:
+        with torch.autocast(device_type=device, dtype=torch.float16, enabled=amp):
             embedding = model(feature)
         embedings.append(embedding)
         labels.append(label)
