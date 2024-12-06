@@ -19,7 +19,35 @@ conda activate discogs-vinet
 
 ## Dataset
 
-For training and evaluating models we use the [Discogs-VI-YT dataset](https://mtg.github.io/discogs-vi-dataset/).
+For training and evaluating models we use the [Discogs-VI-YT dataset](https://mtg.github.io/discogs-vi-dataset/). Therefore the training and evaluation dataset objects we created follows its convention.
+
+We train our models with CQT features. The script that loads audio files, extracts the features, and writes them to disk is `extract_cqt.py`
+
+```bash
+(discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python extract_cqt.py -h
+```
+
+```text
+usage: extract_cqt.py [-h] [--sample-rate SAMPLE_RATE] [--hop-size HOP_SIZE] [--n-octaves N_OCTAVES] [--bins-per-semitone BINS_PER_SEMITONE] [--processes PROCESSES] audio_dir output_dir
+
+This script extracts magnitude CQT spectrograms from a folder containing audio files and saves them as memmap files. Each memmap file is stored as float16 to save space. The script uses multiprocessing to speed up the extraction process.
+
+positional arguments:
+  audio_dir             Directory containing the audio files or a text file containing the audio paths.
+  output_dir            Root directory to save the features. <output_dir>/cqt/ will be created.
+
+options:
+  -h, --help            show this help message and exit
+  --sample-rate SAMPLE_RATE
+                        Sample rate to use for the audio files (default: 22050)
+  --hop-size HOP_SIZE   Hop size to use for the CQT in samples. (default: 512)
+  --n-octaves N_OCTAVES
+                        Number of octaves to use for the CQT. (default: 7)
+  --bins-per-semitone BINS_PER_SEMITONE
+                        Number of CQT bins per semitone. (default: 1)
+  --processes PROCESSES
+                        Number of parallel processes to use for feature extraction. (default: 20)
+```
 
 ## Train a Model
 
