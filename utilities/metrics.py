@@ -1,6 +1,6 @@
 import torch
 
-from .tensor_op import (
+from utilities.tensor_op import (
     pairwise_cosine_similarity,
     pairwise_distance_matrix,
     pairwise_dot_product,

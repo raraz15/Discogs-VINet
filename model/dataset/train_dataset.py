@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from utilities.extract_cqt import mean_downsample_cqt
+from .dataset_utils import mean_downsample_cqt
 
 
 class TrainDataset(Dataset):
@@ -25,7 +25,7 @@ class TrainDataset(Dataset):
         cliques_json_path: str,
         features_dir: str,
         context_length: int,
-        mean_downsample_factor: int = 1,
+        mean_downsample_factor: int = 20,
         cqt_bins: int = 84,
         scale: bool = True,
         versions_per_clique: int = 2,
@@ -253,10 +253,10 @@ class TrainDataset(Dataset):
             )
 
         # Convert to float32
-        feature = np.array(fp, dtype=np.float32)
+        feature = np.array(fp, dtype=np.float32)  # (T, F)
         del fp
+        assert feature.size > 0, "Empty feature"
         assert feature.ndim == 2, f"Expected 2D feature, got {feature.ndim}D"
-        assert feature.shape[0] > 0, "Empty feature"
         assert (
             feature.shape[1] == self.cqt_bins
         ), f"Expected {self.cqt_bins} features, got {feature.shape[1]}"

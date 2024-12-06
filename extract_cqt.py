@@ -1,9 +1,6 @@
-""" This script extracts the CQT spectrogram from a folder containing audio files and 
-saves them as memmap files. Each memmap file is stored as float16 to save space. 
-You can choose between power spectrograms and magnitude spectrograms.
-Power CQT-spectrograms are in dB scale and the dynamic range is 80 dB.
-You can mean downsample the CQT in time by specifying the `downsample_rate` parameter.
-By default, the CQT is not downsampled."""
+""" This script extracts magnitude CQT spectrograms from a folder containing 
+audio files and saves them as memmap files. Each memmap file is stored as float16 
+to save space. The script uses multiprocessing to speed up the extraction process."""
 
 import sys
 import os
@@ -18,31 +15,6 @@ import librosa
 import essentia.standard as es
 
 
-def mean_downsample_cqt(cqt: np.ndarray, mean_window_length: int):
-    """Downsamples the CQT by taking the mean of every `mean_window_length` frames without
-    overlapping. Adapted from https://github.com/yzspku/TPPNet/blob/master/data/gencqt.py
-
-    Parameters:
-    -----------
-        cqt: np.ndarray, shape=(T,F), CQT to downsample
-        mean_window_length: int, number of frames to average together
-
-    Returns:
-    --------
-        new_cqt: np.ndarray, shape=(T//mean_window_length,F), downsampled CQT
-    """
-
-    cqt_T, cqt_F = cqt.shape
-    # Discard the last frame
-    new_T = int(cqt_T // mean_window_length)
-    new_cqt = np.zeros((new_T, cqt_F), dtype=cqt.dtype)
-    for i in range(new_T):
-        new_cqt[i, :] = cqt[
-            i * mean_window_length : (i + 1) * mean_window_length, :
-        ].mean(axis=0)
-    return new_cqt
-
-
 def process_audio(
     audio_path: str,
     cqt_dir: str,
@@ -51,9 +23,6 @@ def process_audio(
     hop_size: int,
     n_bins: int,
     bins_per_octave: int,
-    downsample_rate: int,
-    convert_to_power: bool,
-    dynamic_range: float,
 ):
 
     # Get the YouTube ID of the audio file
@@ -74,26 +43,13 @@ def process_audio(
             n_bins=n_bins,
             bins_per_octave=bins_per_octave,
         ).T  # (T,F) TODO do not transpose?
-        if cqt.shape[0] == 0:
-            raise ValueError("Empty CQT.")
+        assert cqt.size > 0, "Empty cqt"
 
         # Convert to amplitude
         cqt = np.abs(cqt)
 
         # Convert to np.float16 to save storage space
         cqt = cqt.astype(np.float16)
-
-        # Convert to power if specified
-        if convert_to_power:
-            # Amplitude to dB
-            cqt = librosa.core.amplitude_to_db(cqt, ref=np.max)
-            # Clip below and above the dynamic range
-            cqt = np.where(cqt < -dynamic_range, -dynamic_range, cqt)
-            cqt = np.where(cqt > 0, 0, cqt)
-
-        # Downsample the CQT if specified
-        if downsample_rate > 1:
-            cqt = mean_downsample_cqt(cqt, downsample_rate)
 
         # Check for NaN and Inf values
         if np.isnan(cqt).any():
@@ -158,23 +114,6 @@ if __name__ == "__main__":
         help="Number of CQT bins per semitone.",
     )
     parser.add_argument(
-        "--downsample-rate",
-        type=int,
-        default=1,
-        help="Downsample rate to use for mean averaging the CQT in time.",
-    )
-    parser.add_argument(
-        "--convert-to-power",
-        action="store_true",
-        help="Convert the CQT to power spectrogram (dB).",
-    )
-    parser.add_argument(
-        "--dynamic-range",
-        type=int,
-        default=80,
-        help="Dynamic range in dB to use in case of a Power CQT.",
-    )
-    parser.add_argument(
         "--processes",
         type=int,
         default=20,
@@ -235,9 +174,6 @@ if __name__ == "__main__":
                     args.hop_size,
                     n_bins,
                     bins_per_octave,
-                    args.downsample_rate,
-                    args.convert_to_power,
-                    args.dynamic_range,
                 )
                 for audio_path in audio_paths
             ],

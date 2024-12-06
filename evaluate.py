@@ -5,13 +5,13 @@ import yaml
 import argparse
 
 import torch
-from torch.cuda.amp import autocast  # type: ignore
 from torch.utils.data import DataLoader
 
 from model.nets import CQTNet
 from model.dataset import TestDataset
+from model.utils import load_model
+from utilities.utils import format_time
 from utilities.metrics import calculate_metrics
-from utilities.utils import load_model, format_time
 
 # My linux is complaining without the following line
 # It required for the DataLoader to have the num_workers > 0
@@ -26,7 +26,7 @@ def evaluate(
     chunk_size: int,
     noise_works: bool,
     amp: bool,
-    device: str,
+    device: torch.device,
 ) -> dict:
     """Evaluate the model by simulating the retrieval task. Compute the embeddings
     of all versions and calculate the pairwise distances. Calculate the mean average
@@ -48,7 +48,7 @@ def evaluate(
         Flag to indicate if the dataset contains noise works.
     amp : bool
         Flag to indicate if Automatic Mixed Precision should be used.
-    device : str
+    device : torch.device
         Device to use for inference and metric calculation.
 
     Returns:
@@ -58,9 +58,6 @@ def evaluate(
     """
 
     t0 = time.monotonic()
-
-    if amp and device == "cpu":
-        raise ValueError("AMP is not supported on CPU.")
 
     model.eval()
 
@@ -74,19 +71,14 @@ def evaluate(
     embeddings = torch.zeros((N, emb_dim), dtype=torch.float32, device=device)
     labels = torch.zeros(N, dtype=torch.int32, device=device)
 
-    current_index = 0
     print("Extracting embeddings...")
     for idx, (feature, label) in enumerate(loader):
         assert feature.shape[0] == 1, "Batch size must be 1 for inference."
         feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
-        if amp:
-            with autocast(dtype=torch.float16):
-                embedding = model(feature)
-        else:
+        with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp):
             embedding = model(feature)
-        embeddings[current_index : current_index + 1] = embedding
-        labels[current_index : current_index + 1] = label.to(device)
-        current_index += 1
+        embeddings[idx : idx + 1] = embedding
+        labels[idx : idx + 1] = label.to(device)
         if (idx + 1) % (len(loader) // 10) == 0 or idx == len(loader) - 1:
             print(f"[{(idx+1):>{len(str(len(loader)))}}/{len(loader)}]")
     print(f"Extraction time: {format_time(time.monotonic() - t0)}")
@@ -129,7 +121,7 @@ if __name__ == "__main__":
         "config_path",
         type=str,
         help="""Path to the configuration file of the trained model. 
-        The config will be used to find model weigths""",
+        The config will be used to find model weigths.""",
     )
     parser.add_argument(
         "test_cliques",
@@ -167,7 +159,7 @@ if __name__ == "__main__":
         "--chunk-size",
         "-b",
         type=int,
-        default=512,
+        default=1024,
         help="Chunk size to use during metrics calculation.",
     )
     parser.add_argument(
@@ -217,15 +209,15 @@ if __name__ == "__main__":
     )
 
     if args.no_gpu:
-        device = "cpu"
+        device = torch.device("cpu")
     else:
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"\033[31mDevice: {device}\033[0m\n")
 
     if args.disable_amp:
         config["TRAIN"]["AUTOMATIC_MIXED_PRECISION"] = False
 
-    model = load_model(config, device)[0]
+    model = load_model(config, device, mode="infer")
 
     if args.output_dir is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
