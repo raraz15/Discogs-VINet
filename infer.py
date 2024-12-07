@@ -14,7 +14,7 @@ If you wish to use GPU for inference you should add the CUDA_VISIBLE_DEVICES env
 variable to the command line. For example, to use GPU 0, you should run:
 
     CUDA_VISIBLE_DEVICES=0 python main.py <collection_list_file> <query_list_file> 
-    <working_directory> <output_file> [--disable-amp] [--num-workers]
+    <output_file> [--disable-amp] [--num-workers]
 """
 
 import os
@@ -132,19 +132,13 @@ if __name__ == "__main__":
         type=str,
         help="""Text file containing <number of candidates> full path file names for the 
         <number of candidates> audio files in the collection (including the <number of queries> 
-        query documents). Example: /path/to/coversong/collection.txt""",
+        query documents).""",
     )
     parser.add_argument(
         "query_list_file",
         type=str,
         help="""Text file containing the <number of queries> full path file names for the 
         <number of queries> query documents.""",
-    )
-    parser.add_argument(
-        "working_directory",
-        type=str,
-        help="""Full path to a temporary directory where submission will have write 
-        access for caching features or calculations.""",
     )
     parser.add_argument(
         "output_file",
