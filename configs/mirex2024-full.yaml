@@ -1,0 +1,41 @@
+MODEL :
+  NAME: Discogs-VINet-MIREX-full_set
+  ARCHITECTURE: cqtnet
+  CONV_CHANNEL: 40
+  EMBEDDING_SIZE: 512
+  NORMALIZATION: bn # ['bn', 'in', 'ibn']
+  POOLING: adaptive_max # ['adaptive_max', 'gem', 'softpool']
+  PROJECTION: linear # ['none', 'linear', 'affine', 'mlp']
+  L2_NORMALIZE: True # L2 normalize the embeddings.
+  SIMILARITY_SEARCH: MIPS # ['MCSS', 'NNS', 'MIPS'] If L2_NORMALIZE is True, use 'MIPS' for faster search.
+  DOWNSAMPLE_FACTOR: 20 # Downsampling factor.
+  CHECKPOINT_DIR: logs/checkpoints/
+
+TRAIN:
+  # Train and Validation, and Augmentation directories
+  FEATURES_DIR: ../Discogs-VI/features/magnitude_cqt/cqt/
+  TRAIN_CLIQUES: ../Discogs-VI/dataset_release/discogs_20240701/main/Discogs-VI-YT-20240701-light.json
+  VALIDATION_CLIQUES: ../Discogs-VI/dataset_release/discogs_20240701/main/Discogs-VI-YT-20240701-light.json.val
+  VERSIONS_PER_CLIQUE: 4 # Number of versions per clique during a training iteration.
+  CONTEXT_LENGTH: 7600 # Number of frames to consider as context, before downsampling.
+  BATCH_SIZE: 42 # Number of cliques to sample at each iteration.
+  EPOCHS: 40 # Number of epochs to train.
+  LOSS:
+    MARGIN: 0.3 # Triplet loss margin
+    POSITIVE_MINING_MODE: random # ['hard', 'random', 'easy']
+    NEGATIVE_MINING_MODE: hard # ['hard', 'random', 'semi-hard']
+    SQUARED_DISTANCE: False # Use squared distance in the loss.
+    NON_ZERO_MEAN: True # If true, the zero losses in the batch are filtered out before averaging.
+    STATS: True
+  OPTIMIZER: Adam # ['Adam', 'AdamW']
+  AUTOMATIC_MIXED_PRECISION: True # Use mixed precision training.
+  LR:
+    SCHEDULE: COSINE # ['NONE', 'STEP', 'MULTISTEP', 'EXPONENTIAL', 'COSINE, LIN-WARMUP-PCWS'].
+    LR: 0.0001 # Starting learning rate in case of a schedule or constant in case of NONE.
+    PARAMS:
+      WARMUP_STEPS: 5
+      MAX_LR: 0.01
+      MIN_LR: 0.00001
+  CUDA_DETERMINISTIC: False # Set to True for deterministic training.
+  CUDA_BENCHMARK: False # Set to True for benchmarking.
+  CLIQUE_USAGE_RATIO: 1.0 # Fraction of training data to use. Useful for debugging. 1.0 to use 100% of data.
