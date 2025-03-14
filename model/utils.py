@@ -122,6 +122,7 @@ def load_model(config: dict, device: str, mode="train"):
         elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "COSINE":
             scheduler = CosineAnnealingWarmupRestarts(
                 optimizer,
+                first_cycle_steps=config["TRAIN"]["EPOCHS"],
                 **lr_params,
             )
         elif config["TRAIN"]["LR"]["SCHEDULE"].upper() == "LIN-WARMUP-PCWS":
