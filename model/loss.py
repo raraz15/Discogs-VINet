@@ -14,7 +14,6 @@ def triplet_loss(
     negative_mining_mode: str = "hard",
     margin: float = 1,
     squared_distance: bool = False,
-    non_zero_mean: bool = False,
     stats: bool = False,
 ) -> Tuple[torch.Tensor, Union[int, None]]:
     """Compute the triplet loss for given embeddings. We use online sampling to
@@ -38,8 +37,6 @@ def triplet_loss(
         value is also used to sample the negatives.
     squared_distance: bool
         If True, the pairwise distance matrix is squared before computing the loss.
-    non_zero_mean: bool
-        If True, the loss is averaged only over the non-zero losses.
     stats: bool
         If True, return the number of positive triplets in the batch. Else return None.
 
@@ -89,10 +86,6 @@ def triplet_loss(
         num_unsatisfied_triplets = None
 
     # Average the loss over the batch (can filter out zero losses if needed)
-    if non_zero_mean:
-        mask = loss > 0
-        if any(mask):
-            loss = loss[mask]
     loss = loss.mean()
 
     return loss, num_unsatisfied_triplets

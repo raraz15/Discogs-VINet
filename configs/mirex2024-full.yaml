@@ -25,7 +25,6 @@ TRAIN:
     POSITIVE_MINING_MODE: random # ['hard', 'random', 'easy']
     NEGATIVE_MINING_MODE: hard # ['hard', 'random', 'semi-hard']
     SQUARED_DISTANCE: False # Use squared distance in the loss.
-    NON_ZERO_MEAN: True # If true, the zero losses in the batch are filtered out before averaging.
     STATS: True
   OPTIMIZER: Adam # ['Adam', 'AdamW']
   AUTOMATIC_MIXED_PRECISION: True # Use mixed precision training.
