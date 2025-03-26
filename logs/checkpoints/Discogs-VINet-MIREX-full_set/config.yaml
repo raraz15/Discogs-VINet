@@ -1,0 +1,34 @@
+MODEL:
+  ARCHITECTURE: cqtnet
+  CHECKPOINT_DIR: ./logs/checkpoints/
+  CHECKPOINT_PATH: ./logs/checkpoints/Discogs-VINet-MIREX-full_set/model_checkpoint.pth
+  CONV_CHANNEL: 40
+  DOWNSAMPLE_FACTOR: 20
+  EMBEDDING_SIZE: 512
+  L2_NORMALIZE: true
+  NAME: Discogs-VINet-MIREX-full_set
+  NORMALIZATION: bn
+  POOLING: adaptive_max
+  PROJECTION: linear
+  SIMILARITY_SEARCH: MIPS
+TRAIN:
+  AUTOMATIC_MIXED_PRECISION: true
+  BATCH_SIZE: 42
+  CLIQUE_USAGE_RATIO: 1.0
+  CONTEXT_LENGTH: 7600
+  CUDA_BENCHMARK: false
+  CUDA_DETERMINISTIC: false
+  EPOCHS: 40
+  FEATURES_DIR: ../Discogs-VI/features/magnitude_cqt/cqt/
+  LOSS_CONFIG:
+    MARGIN: 0.3
+    NEGATIVE_MINING_MODE: hard
+    POSITIVE_MINING_MODE: random
+    SQUARED_DISTANCE: false
+  LR:
+    INITIAL_RATE: 0.01
+    SCHEDULE: COSINE
+  OPTIMIZER: Adam
+  TRAIN_CLIQUES: ../Discogs-VI/dataset_release/discogs_20240701/main/Discogs-VI-YT-20240701-light.json
+  VALIDATION_CLIQUES:  ../Discogs-VI/dataset_release/discogs_20240701/main/Discogs-VI-YT-20240701-light.json.val
+  VERSIONS_PER_CLIQUE: 4
