@@ -79,13 +79,13 @@ def triplet_loss(
     # Compute the triplet loss
     loss = F.relu(dist_AP - dist_AN + margin)
 
-    # See how many triplets per batch are positive
+    # Check how many triplets do not satisfy the margin condition
     if stats:
         num_unsatisfied_triplets = int((loss > 0).sum().item())
     else:
         num_unsatisfied_triplets = None
 
-    # Average the loss over the batch (can filter out zero losses if needed)
+    # Average the loss over the batch
     loss = loss.mean()
 
     return loss, num_unsatisfied_triplets
