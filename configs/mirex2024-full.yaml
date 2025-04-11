@@ -1,5 +1,5 @@
 MODEL :
-  NAME: Discogs-VINet-MIREX-full_set
+  NAME: Discogs-VINet-MIREX-full_set-replicate
   ARCHITECTURE: cqtnet
   CONV_CHANNEL: 40
   EMBEDDING_SIZE: 512
@@ -30,11 +30,11 @@ TRAIN:
   AUTOMATIC_MIXED_PRECISION: True # Use mixed precision training.
   LR:
     SCHEDULE: COSINE # ['NONE', 'STEP', 'MULTISTEP', 'EXPONENTIAL', 'COSINE, LIN-WARMUP-PCWS'].
-    LR: 0.0001 # Starting learning rate in case of a schedule or constant in case of NONE.
+    LR: 0.01 # Starting learning rate in case of a schedule or constant in case of NONE.
     PARAMS:
       WARMUP_STEPS: 5
       MAX_LR: 0.01
-      MIN_LR: 0.00001
+      MIN_LR: 0.0001
   CUDA_DETERMINISTIC: False # Set to True for deterministic training.
   CUDA_BENCHMARK: False # Set to True for benchmarking.
   CLIQUE_USAGE_RATIO: 1.0 # Fraction of training data to use. Useful for debugging. 1.0 to use 100% of data.
