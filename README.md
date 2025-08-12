@@ -2,7 +2,7 @@
 
 This repository contains the code to train and evaluate the Discogs-VINet model on the Discogs-VI dataset. It also contains the code used for CQT extraction. The dataset and the model are discussed in detail in our ISMIR 2024 paper: "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata"
 
-Contact: recepoguz.araz@upf.edu
+Contact: <recepoguz.araz@upf.edu>
 
 ## Installation
 
@@ -80,7 +80,27 @@ options:
 
 ## Inference
 
-TODO: A script for inference on general data.
+```bash
+(discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python inference.py -h
+usage: inference.py [-h] [--granularity {track,chunk}] [--overlap OVERLAP] [--fp16] [--num-workers NUM_WORKERS] [--no-gpu] [--num-partitions NUM_PARTITIONS] [--partition PARTITION] input_dir config_path output_dir
+
+positional arguments:
+  input_dir             Path to the directory containing the audio files.
+  config_path           Path to the configuration file of the trained model. The config will be used to find model weigths.
+  output_dir            Path to the output directory. The tree structure of the input directory will be replicated here.
+
+options:
+  -h, --help            show this help message and exit
+  --granularity {track,chunk}
+                        Embedding granularity level to use for extraction. Track-level embeddings create a single embedding for the whole track. Chunk-level embeddings create embeddings using the model's context length. (default: None)
+  --overlap OVERLAP     Overlap ratio to use during chunk-level embedding extraction. (default: None)
+  --fp16                Store the embeddings with FP16 precision to save space. (default: False)
+  --num-workers NUM_WORKERS
+                        Number of workers to use in the DataLoader. (default: 8)
+  --no-gpu              Flag to disable the GPU. If not provided, the GPU will be used if available. (default: False)
+  --num-partitions NUM_PARTITIONS
+  --partition PARTITION
+```
 
 ## Citation
 
