@@ -14,7 +14,7 @@ def count_model_parameters(model, verbose=True):
     grad_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     non_grad_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
     if verbose:
-        print(f"\nTotal number of\n    trainable parameters: {grad_params:,}")
+        print(f"Total number of\n    trainable parameters: {grad_params:,}")
         print(
             f"non-trainable parameters: {non_grad_params:>{len(str(grad_params))+2},}"
         )
