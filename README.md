@@ -6,6 +6,16 @@ This repository contains the code to train and evaluate Discogs-VINet models for
 
 Contact: <recepoguz.araz@upf.edu>
 
+- [Discogs-VINet](#discogs-vinet)
+  - [Installation](#installation)
+  - [Dataset](#dataset)
+  - [Train a Model](#train-a-model)
+  - [Pre-trained Models](#pre-trained-models)
+  - [Evaluate a Model](#evaluate-a-model)
+  - [Inference](#inference)
+  - [MIREX Submission](#mirex-submission)
+  - [Citation](#citation)
+
 ## Installation
 
 We use Python 3.11.8 for running the code. Please install the conda environment using:
