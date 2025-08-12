@@ -1,19 +1,19 @@
 # Discogs-VINet
 
-This repository contains the code to train and evaluate Discogs-VINet models for musical version identification (VI), also known as, cover song identification (CSI). The model and the development dataset are discussed in our [ISMIR2024 paper](https://arxiv.org/abs/2410.17400): "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata". 
+This repository contains the code to train and evaluate Discogs-VINet model for musical version identification (VI), also known as, cover song identification (CSI). The model and the development dataset are discussed in our [ISMIR2024 paper](https://arxiv.org/abs/2410.17400): "Discogs-VI: A Musical Version Identification Dataset Based on Public Editorial Metadata".
 
-*Note:* I am keeping the repository updated with new experiments so the main branch has different features from the ISMIR submission. If you want to access the ISMIR2024 code just do `git checkout ISMIR2024`.
+**Note:** I am keeping the repository updated with new experiments so the main branch has different features from the ISMIR submission, and it points to our MIREX2024 submission. If you want to access the ISMIR2024 code just do `git checkout ISMIR2024`. In fact, trying to use the ISMIR2024 model with the main branch will not work.
 
 Contact: <recepoguz.araz@upf.edu>
 
 - [Discogs-VINet](#discogs-vinet)
   - [Installation](#installation)
   - [Dataset](#dataset)
-  - [Train a Model](#train-a-model)
   - [Pre-trained Models](#pre-trained-models)
-  - [Evaluate a Model](#evaluate-a-model)
   - [Inference](#inference)
   - [MIREX Submission](#mirex-submission)
+  - [Evaluate a Model](#evaluate-a-model)
+  - [Train a Model](#train-a-model)
   - [Citation](#citation)
 
 ## Installation
@@ -31,80 +31,15 @@ conda activate discogs-vinet
 
 For training and evaluating models we use the [Discogs-VI-YT dataset](https://mtg.github.io/discogs-vi-dataset/).
 
-## Train a Model
-
-We use YAML config files to determine model and training parameters. They are located in `configs/` directory. 
-
-*Note:* For monitoring training we use Wandb. If you don't want to use it simply pass `--no-wandb` as indicated below.
-
-```bash
-(discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python train.py -h
-```
-
-```text
-usage: train.py [-h] [--epochs EPOCHS] [--save-frequency SAVE_FREQUENCY] [--eval-frequency EVAL_FREQUENCY] [--similarity-search {MCSS,NNS}] [--chunk-size CHUNK_SIZE] [--pre-eval] [--num-workers NUM_WORKERS] [--no-wandb] [--wandb-id WANDB_ID] config_path
-
-Training script for the model.
-
-positional arguments:
-  config_path           Path to the configuration file.
-
-options:
-  -h, --help            show this help message and exit
-  --epochs EPOCHS       Number of epochs to train the model. (default: 50)
-  --save-frequency SAVE_FREQUENCY
-                        Save the model every N epochs. (default: 1)
-  --eval-frequency EVAL_FREQUENCY
-                        Evaluate the model every N epochs. (default: 5)
-  --similarity-search {MCSS,NNS}, -s {MCSS,NNS}
-                        Similarity search function to use for the evaluation. MCSS: Maximum Cosine Similarity Search, NNS: Nearest Neighbour Search. (default: MCSS)
-  --chunk-size CHUNK_SIZE, -b CHUNK_SIZE
-                        Chunk size to use during metrics calculation. (default: 1024)
-  --pre-eval            Evaluate the model before training. (default: False)
-  --num-workers NUM_WORKERS
-                        Number of workers to use in the DataLoader. (default: 10)
-  --no-wandb            Do not use wandb to log experiments. (default: False)
-  --wandb-id WANDB_ID   Wandb id to resume an experiment. (default: None)
-```
-
 ## Pre-trained Models
 
-We provide the pre-trained Discogs-VINet's weights and corresponding configuration file in `logs/checkpoints/Discogs-VINet/`. This model corresponds to the one described in ISMIR2024.
+We provide the pre-trained Discogs-VINet's weights and corresponding configuration file in `logs/checkpoints/Discogs-VINet/`. This model corresponds to the one described in the ISMIR2024 paper.
 
-Later, we participated in the MIREX2024 Cover Song Identification task with the improved, Discogs-VINet-MIREX model. You can find the short technical report [here](https://futuremirex.com/portal/wp-content/uploads/2024/11/R_Oguz_Araz-MIREX2024.pdf). Our submission came in 2nd place! However, since ByteCover2 is not open source, it is known to be not reproducible, and it has x8 times more parameters, we *are* the open-source and reproducible winners. 
+Later, we participated in the MIREX2024 Cover Song Identification task with the Discogs-VINet-MIREX model. You can find the short technical report [here](https://futuremirex.com/portal/wp-content/uploads/2024/11/R_Oguz_Araz-MIREX2024.pdf). Our submission came in 2nd place! However, since ByteCover2 is not open source, it is known to be not reproducible, and it has x8 times more parameters, we *are* the open-source and reproducible winners.
 
-As described in the technical report, we overfitted an improved version of Discogs-VINet to the *full* Discogs-VI-YT and we called this model Discogs-VINet-MIREX-full_set. However, I think the performance of this new model trained on only the training partition (same as Discogs-VINet) is interesting for comparison. Unfortunately I did not report this metric on the technical paper and I do not know what to call this model. I will share the model and its metrics here soon.
+As described in the technical report, we overfitted an improved version of Discogs-VINet to the *full* Discogs-VI-YT (*not just the train set*) and we called this model Discogs-VINet-MIREX-full_set. However, I think the performance of this new model trained on only the training partition (same as Discogs-VINet) is interesting for comparison. Unfortunately I did not report this metric on the technical paper and I do not know what to call this model. I will share the model and its metrics here soon.
 
-
-## Evaluate a Model
-
-As discussed in the paper, we included almost all of the Da-TACOS benchmark set' and SHS100K2-TEST's cliques in our test set–and added more. However, if for any reason, you still want to evaluate on either dataset, our evaluation script can do with it.
-
-```bash
-(discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python evaluate.py -h
-```
-
-```text
-usage: evaluate.py [-h] [--output-dir OUTPUT_DIR] [--similarity-search {MCSS,NNS}] [--features-dir FEATURES_DIR] [--chunk-size CHUNK_SIZE] [--num-workers NUM_WORKERS] [--no-gpu] config_path test_cliques
-
-positional arguments:
-  config_path           Path to the configuration file of the trained model. The config will be used to find model weigths
-  test_cliques          Path to the test cliques.json file. Can be SHS100K, Da-TACOS or DiscogsVI.
-
-options:
-  -h, --help            show this help message and exit
-  --output-dir OUTPUT_DIR, -o OUTPUT_DIR
-                        Path to the output directory. (default: None)
-  --similarity-search {MCSS,NNS}, -s {MCSS,NNS}
-                        Similarity search function to use for the evaluation. MCSS: Maximum Cosine Similarity Search, NNS: Nearest Neighbour Search. (default: MCSS)
-  --features-dir FEATURES_DIR, -f FEATURES_DIR
-                        Path to the features directory. Optional, by default uses the path in the config file. (default: None)
-  --chunk-size CHUNK_SIZE, -b CHUNK_SIZE
-                        Chunk size to use during metrics calculation. (default: 512)
-  --num-workers NUM_WORKERS
-                        Number of workers to use in the DataLoader. (default: 10)
-  --no-gpu              Flag to disable GPU. If not provided, the GPU will be used if available. (default: False)
-```
+**Update**: I finally trained the same architecture as Discogs-VINet-MIREX-full_set on only the training partition of Discogs-VI. However, increasing the number of convolutional channels resulted in a decrease in batch size, which in turn affected the quality of the representations learned by contrastive learning. This model, performs kind of worse than the original Discogs-VINet model. I included the config file just in case. The CLEWS paper trains the Discogs-VINet-MIREX-full_set architecture and reports its metrics. So using the original Discogs-VI model would perform better.
 
 ## Inference
 
@@ -142,7 +77,7 @@ options:
 
 ## MIREX Submission
 
-If you want to use the MIREX submission format, you can use `mirex.py` as the following.
+If you want to follow the MIREX submission format, you can use `mirex.py` as the following.
 
 ```text
 (discogs-vinet2) [raraz@node027 Discogs-VINet]$ python mirex.py -h
@@ -165,6 +100,72 @@ options:
   --disable-amp         Flag to disable Automatic Mixed Precision for inference. If not provided, AMP usage will depend on the model config file. (default: False)
   --num-workers NUM_WORKERS
                         Number of workers to use in the DataLoader. (default: 10)
+```
+
+## Evaluate a Model
+
+As discussed in the paper, we included almost all of the Da-TACOS benchmark set' and SHS100K2-TEST's cliques in our test set–and added more. However, if for any reason, you still want to evaluate on either dataset, our evaluation script can do with it.
+
+```bash
+(discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python evaluate.py -h
+```
+
+```text
+usage: evaluate.py [-h] [--output-dir OUTPUT_DIR] [--similarity-search {MCSS,NNS}] [--features-dir FEATURES_DIR] [--chunk-size CHUNK_SIZE] [--num-workers NUM_WORKERS] [--no-gpu] config_path test_cliques
+
+positional arguments:
+  config_path           Path to the configuration file of the trained model. The config will be used to find model weigths
+  test_cliques          Path to the test cliques.json file. Can be SHS100K, Da-TACOS or DiscogsVI.
+
+options:
+  -h, --help            show this help message and exit
+  --output-dir OUTPUT_DIR, -o OUTPUT_DIR
+                        Path to the output directory. (default: None)
+  --similarity-search {MCSS,NNS}, -s {MCSS,NNS}
+                        Similarity search function to use for the evaluation. MCSS: Maximum Cosine Similarity Search, NNS: Nearest Neighbour Search. (default: MCSS)
+  --features-dir FEATURES_DIR, -f FEATURES_DIR
+                        Path to the features directory. Optional, by default uses the path in the config file. (default: None)
+  --chunk-size CHUNK_SIZE, -b CHUNK_SIZE
+                        Chunk size to use during metrics calculation. (default: 512)
+  --num-workers NUM_WORKERS
+                        Number of workers to use in the DataLoader. (default: 10)
+  --no-gpu              Flag to disable GPU. If not provided, the GPU will be used if available. (default: False)
+```
+
+## Train a Model
+
+We use YAML config files to determine model and training parameters. They are located in `configs/` directory.
+
+*Note:* For monitoring training we use Wandb. If you don't want to use it, simply pass `--no-wandb` as indicated below.
+
+```bash
+(discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python train.py -h
+```
+
+```text
+usage: train.py [-h] [--epochs EPOCHS] [--save-frequency SAVE_FREQUENCY] [--eval-frequency EVAL_FREQUENCY] [--similarity-search {MCSS,NNS}] [--chunk-size CHUNK_SIZE] [--pre-eval] [--num-workers NUM_WORKERS] [--no-wandb] [--wandb-id WANDB_ID] config_path
+
+Training script for the model.
+
+positional arguments:
+  config_path           Path to the configuration file.
+
+options:
+  -h, --help            show this help message and exit
+  --epochs EPOCHS       Number of epochs to train the model. (default: 50)
+  --save-frequency SAVE_FREQUENCY
+                        Save the model every N epochs. (default: 1)
+  --eval-frequency EVAL_FREQUENCY
+                        Evaluate the model every N epochs. (default: 5)
+  --similarity-search {MCSS,NNS}, -s {MCSS,NNS}
+                        Similarity search function to use for the evaluation. MCSS: Maximum Cosine Similarity Search, NNS: Nearest Neighbour Search. (default: MCSS)
+  --chunk-size CHUNK_SIZE, -b CHUNK_SIZE
+                        Chunk size to use during metrics calculation. (default: 1024)
+  --pre-eval            Evaluate the model before training. (default: False)
+  --num-workers NUM_WORKERS
+                        Number of workers to use in the DataLoader. (default: 10)
+  --no-wandb            Do not use wandb to log experiments. (default: False)
+  --wandb-id WANDB_ID   Wandb id to resume an experiment. (default: None)
 ```
 
 ## Citation
