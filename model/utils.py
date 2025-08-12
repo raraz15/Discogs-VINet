@@ -25,7 +25,7 @@ def count_model_parameters(model, verbose: bool = True) -> Tuple[int, int]:
     return grad_params, non_grad_params
 
 
-def build_model(config: dict, device: str) -> CQTNet:
+def build_model(config: dict, device: torch.device) -> CQTNet:
 
     if config["MODEL"]["ARCHITECTURE"].upper() == "CQTNET":
         model = CQTNet(
@@ -82,7 +82,7 @@ def save_model(
     print(f"Model saved in {save_dir}")
 
 
-def load_model(config: dict, device: str, mode="train"):
+def load_model(config: dict, device: torch.device, mode="train"):
 
     assert mode in ["train", "infer"], "Mode must be either 'train' or 'infer'"
 

@@ -1,4 +1,5 @@
-"""This script is intended for inference. It creates a csv file following the MIREX 
+"""This script is intended for running inference on a set of files and computing their
+pairwise similarities. It creates a csv file following the MIREX
 guidelines provided in https://www.music-ir.org/mirex/wiki/2024:Cover_Song_Identification.
 
 Additional to the specified arguments in the guideline, we added the ability to disable
@@ -6,23 +7,23 @@ Automatic Mixed Precision (AMP) for inference. AMP is enabled by default if not 
 in the model configuration file. You can also provide the number of workers to use in the
 DataLoader.
 
-The script loads a pre-trained model and computes the pairwise distances between the 
-query versions and the candidates in the collection. The output is a tab-separated file 
+The script loads a pre-trained model and computes the pairwise distances between the
+query versions and the candidates in the collection. The output is a tab-separated file
 containing the pairwise distances between the query versions and the candidates.
 
 If you wish to use GPU for inference you should add the CUDA_VISIBLE_DEVICES environment
 variable to the command line. For example, to use GPU 0, you should run:
 
-    CUDA_VISIBLE_DEVICES=0 python main.py <collection_list_file> <query_list_file> 
+    CUDA_VISIBLE_DEVICES=0 python main.py <collection_list_file> <query_list_file>
     <working_directory> <output_file> [--disable-amp] [--num-workers]
 """
 
-import os
 import csv
 import time
 import yaml
 import argparse
 from typing import Tuple
+from pathlib import Path
 
 import numpy as np
 
@@ -40,7 +41,7 @@ from utilities.tensor_op import pairwise_distance_matrix
 def infer(
     model: CQTNet,
     loader: DataLoader,
-    query_list: list[str],
+    query_list: list[Path],
     amp: bool,
     device: torch.device,
 ) -> Tuple[list[int], np.ndarray]:
@@ -78,23 +79,23 @@ def infer(
     N = len(loader)
     Q = len(query_list)
 
+    candidate_paths = [p[0] for p in loader.dataset.path_pairs]
+
+    # Preallocate tensors to avoid https://github.com/pytorch/pytorch/issues/13246
     emb_dim = model(
         loader.dataset.__getitem__(0).unsqueeze(0).unsqueeze(1).to(device)
     ).shape[1]
-
-    candidate_paths = loader.dataset.file_paths
-    assert len(candidate_paths) == N, "Number of candidates does not match the dataset."
-
-    # Preallocate tensors to avoid https://github.com/pytorch/pytorch/issues/13246
     embeddings = torch.zeros((N, emb_dim), dtype=torch.float32, device=device)
     D = torch.zeros((Q, N), dtype=torch.float32, device=device)
 
     print("Extracting embeddings...")
-    for idx, feature in enumerate(loader):
-        assert feature.shape[0] == 1, "Batch size must be 1 for inference."
-        feature = feature.unsqueeze(1).to(device)  # (1,F,T) -> (1,1,F,T)
+    for idx, (feature, path_in, _) in enumerate(loader):
+        if feature is None:
+            continue
+        assert feature.ndim == 2, f"Expected feature.ndim == 2, got {feature.ndim}"
+        feature = feature.unsqueeze(0).unsqueeze(1)  # (F,T) -> (1,1,F,T)
         with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=amp):
-            embedding = model(feature)
+            embedding = model(feature.to(device))  # (1, D)
         embeddings[idx : idx + 1] = embedding
         if (idx + 1) % (len(loader) // 10) == 0 or idx == len(loader) - 1:
             print(f"[{(idx+1):>{len(str(len(loader)))}}/{len(loader)}]")
@@ -177,11 +178,11 @@ if __name__ == "__main__":
     """This part follows the MIREX2024 submission guidelines."""
 
     with open(args.collection_list_file, "r") as f:
-        collection_list = [p.strip() for p in f.readlines()]
-    assert all([os.path.exists(f) for f in collection_list]), "Some files do not exist."
+        collection_list = [Path(p.strip()) for p in f.readlines()]
+    assert all([f.exists() for f in collection_list]), "Some files do not exist."
 
     with open(args.query_list_file, "r") as f:
-        query_list = [p.strip() for p in f.readlines()]
+        query_list = [Path(p.strip()) for p in f.readlines()]
     assert set(query_list).issubset(
         set(collection_list)
     ), "Some query files are not in the collection."
@@ -194,13 +195,16 @@ if __name__ == "__main__":
             ]
         )
         for idx, file_path in enumerate(collection_list):
-            writer.writerow([f"{idx+1}", file_path])
+            writer.writerow([f"{idx+1}", str(file_path)])
 
     """Ends here"""
 
+    # Since we won't write the embeddings to disk, use None for the output path
+    path_pairs = [(path_audio, None) for path_audio in collection_list]
     dataset = InferenceDataset(
-        collection_list,
-        mean_downsample_factor=config["MODEL"]["MEAN_DOWNSAMPLE_FACTOR"],
+        path_pairs,
+        context_length=config["MODEL"]["CONTEXT_LENGTH"],
+        downsample_factor=config["MODEL"]["MEAN_DOWNSAMPLE_FACTOR"],
     )
     loader = DataLoader(
         dataset,
@@ -208,6 +212,8 @@ if __name__ == "__main__":
         shuffle=False,
         drop_last=False,
         num_workers=args.num_workers,
+        pin_memory=True,
+        collate_fn=lambda x: x[0],
     )
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

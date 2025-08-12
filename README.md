@@ -98,25 +98,54 @@ options:
 
 ## Inference
 
-You can run inference on list of files with `infer.py`.
+You can run inference on a directory of files with `infer.py`.
 
 ```bash
 (discogs-vinet) [oaraz@hpcmtg1 Discogs-VINet]$ python infer.py -h
 ```
 
 ```text
-usage: infer.py [-h] [--disable-amp] [--num-workers NUM_WORKERS] config_path collection_list_file query_list_file working_directory output_file
+(discogs-vinet2) [raraz@node027 Discogs-VINet]$ python inference.py -h
+[   INFO   ] MusicExtractorSVM: no classifier models were configured by default
+usage: inference.py [-h] [--granularity {track,chunk}] [--overlap OVERLAP] [--fp16] [--num-workers NUM_WORKERS] [--no-gpu] [--disable-amp] [--num-partitions NUM_PARTITIONS] [--partition PARTITION] input_dir config_path output_dir
 
-This script is intended for inference. It creates a csv file following the MIREX guidelines provided in https://www.music-ir.org/mirex/wiki/2024:Cover_Song_Identification. Additional to the specified arguments in the guideline, we added the
-ability to disable Automatic Mixed Precision (AMP) for inference. AMP is enabled by default if not specified in the model configuration file. You can also provide the number of workers to use in the DataLoader. The script loads a pre-trained
-model and computes the pairwise distances between the query versions and the candidates in the collection. The output is a tab-separated file containing the pairwise distances between the query versions and the candidates. If you wish to use
-GPU for inference you should add the CUDA_VISIBLE_DEVICES environment variable to the command line. For example, to use GPU 0, you should run: CUDA_VISIBLE_DEVICES=0 python main.py <collection_list_file> <query_list_file> <working_directory>
-<output_file> [--disable-amp] [--num-workers]
+positional arguments:
+  input_dir             Path to the directory containing the audio files.
+  config_path           Path to the configuration file of the trained model. The config will be used to find model weigths.
+  output_dir            Path to the output directory. The tree structure of the input directory will be replicated here.
+
+options:
+  -h, --help            show this help message and exit
+  --granularity {track,chunk}
+                        Embedding granularity level to use for extraction. Track-level embeddings create a single embedding for the whole track. Chunk-level embeddings create embeddings using the model's context length. (default: track)
+  --overlap OVERLAP     Overlap ratio to use during chunk-level embedding extraction. (default: None)
+  --fp16                Store the embeddings with FP16 precision to save space. (default: False)
+  --num-workers NUM_WORKERS
+                        Number of workers to use in the DataLoader. (default: 8)
+  --no-gpu              Flag to disable the GPU. If not provided, the GPU will be used if available. (default: False)
+  --disable-amp         Flag to disable Automatic Mixed Precision for inference. If not provided, AMP usage will depend on the model config file. (default: False)
+  --num-partitions NUM_PARTITIONS
+                        Number of partitions to split the input files into. If greater than 1, the script will process only the files corresponding to the specified partition. (default: 1)
+  --partition PARTITION
+                        Partition number to process (default: 0)
+```
+
+## MIREX Submission
+
+If you want to use the MIREX submission format, you can use `mirex.py` as the following.
+
+```text
+(discogs-vinet2) [raraz@node027 Discogs-VINet]$ python mirex.py -h
+usage: mirex.py [-h] [--disable-amp] [--num-workers NUM_WORKERS] config_path collection_list_file query_list_file working_directory output_file
+
+This script is intended for running inference on a set of files and computing their pairwise similarities. It creates a csv file following the MIREX guidelines provided in https://www.music-ir.org/mirex/wiki/2024:Cover_Song_Identification. Additional to the specified arguments in the guideline, we added the ability
+to disable Automatic Mixed Precision (AMP) for inference. AMP is enabled by default if not specified in the model configuration file. You can also provide the number of workers to use in the DataLoader. The script loads a pre-trained model and computes the pairwise distances between the query versions and the
+candidates in the collection. The output is a tab-separated file containing the pairwise distances between the query versions and the candidates. If you wish to use GPU for inference you should add the CUDA_VISIBLE_DEVICES environment variable to the command line. For example, to use GPU 0, you should run:
+CUDA_VISIBLE_DEVICES=0 python main.py <collection_list_file> <query_list_file> <working_directory> <output_file> [--disable-amp] [--num-workers]
 
 positional arguments:
   config_path           Path to the configuration file of the trained model. The config should point to the model weigths.
-  collection_list_file  Text file containing <number of candidates> full path file names for the <number of candidates> audio files in the collection (including the <number of queries> query documents). Example:
-                        /path/to/coversong/collection.txt
+  collection_list_file  Text file containing <number of candidates> full path file names for the <number of candidates> audio files in the collection (including the <number of queries> query documents). Example: /path/to/coversong/collection.txt
   query_list_file       Text file containing the <number of queries> full path file names for the <number of queries> query documents.
   working_directory     Full path to a temporary directory where submission will have write access for caching features or calculations.
   output_file           Full path to file where submission should output the similarity matrix (<number of candidates> header rows + <number of queries> x <number of candidates> data matrix).
